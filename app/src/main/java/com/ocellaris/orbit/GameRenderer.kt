@@ -161,14 +161,14 @@ fun GameRenderer() {
                 )
 
                 if (isNext) {
-                    // Capture zone — subtle dashed ring only (no fill)
+                    // Capture zone indicator — matches actual capture radius
                     drawCircle(
-                        color = cyanColor.copy(alpha = 0.12f),
-                        radius = point.captureRadius + point.radius,
+                        color = cyanColor.copy(alpha = 0.1f),
+                        radius = point.radius + 30f,
                         center = Offset(point.x, point.y),
                         style = Stroke(
                             width = 1f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 12f))
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 10f))
                         )
                     )
                 }

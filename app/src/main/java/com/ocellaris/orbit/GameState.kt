@@ -62,8 +62,8 @@ class GameState(private val context: Context) {
         private set
     var travelVY = 0f
         private set
-    private val travelSpeed = 700f
-    private val gravityStrength = 900000f  // gravity constant — strong pull, visible arcs
+    private val travelSpeed = 600f
+    private val gravityStrength = 800f  // acceleration in px/s² at reference distance
     private var totalGravityAssist = 0f  // tracks how much gravity curved the path
 
     val particles = mutableListOf<Particle>()
@@ -240,28 +240,31 @@ class GameState(private val context: Context) {
                     val next = orbitPoints[nextIndex]
                     val dx = next.x - dotX
                     val dy = next.y - dotY
-                    val distSq = dx * dx + dy * dy
-                    val dist = sqrt(distSq).coerceAtLeast(50f)
+                    val dist = sqrt(dx * dx + dy * dy).coerceAtLeast(30f)
 
-                    // Gravity: F = G / r² — stronger when closer
-                    val gravForce = gravityStrength / distSq.coerceAtLeast(2500f)
-                    val gravX = (dx / dist) * gravForce
-                    val gravY = (dy / dist) * gravForce
+                    // Gravity: acceleration = G * (refDist / dist)
+                    // Linear falloff — strong enough to visibly curve the path
+                    val refDist = 300f
+                    val accel = gravityStrength * (refDist / dist).coerceAtMost(4f)
 
-                    travelVX += gravX * dt
-                    travelVY += gravY * dt
+                    // Direction toward the orbit point
+                    val dirX = dx / dist
+                    val dirY = dy / dist
 
-                    // Track how much gravity is helping (for perfect detection)
-                    totalGravityAssist += sqrt(gravX * gravX + gravY * gravY) * dt
+                    travelVX += dirX * accel * dt
+                    travelVY += dirY * accel * dt
+
+                    // Track cumulative velocity change from gravity
+                    totalGravityAssist += accel * dt
                 }
 
                 // Move dot
                 dotX += travelVX * dt
                 dotY += travelVY * dt
 
-                // Very slight drag
-                travelVX *= (1f - 0.05f * dt)
-                travelVY *= (1f - 0.05f * dt)
+                // Minimal drag
+                travelVX *= (1f - 0.02f * dt)
+                travelVY *= (1f - 0.02f * dt)
 
                 spawnTrailParticle()
                 travelTrail.add(Particle(dotX, dotY, alpha = 1f, size = 3f))
@@ -271,14 +274,16 @@ class GameState(private val context: Context) {
                     val next = orbitPoints[nextIndex]
                     val dist = sqrt((dotX - next.x).pow(2) + (dotY - next.y).pow(2))
 
-                    if (dist < next.captureRadius + next.radius) {
+                    // Capture zone = just the orbit radius (not capture + radius)
+                    if (dist < next.radius + 30f) {
                         currentOrbitIndex = nextIndex
                         phase = Phase.ORBITING
                         dotAngle = atan2(dotY - next.y, dotX - next.x)
 
-                        // Perfect = clean catch where gravity didn't have to work hard
-                        // Higher threshold with stronger gravity — harder to get perfect
-                        val isPerfect = totalGravityAssist < 60f
+                        // Perfect = your aim was good enough that gravity barely changed your course
+                        // With strong gravity (800 px/s²), a straight shot accumulates ~50-100 assist
+                        // A bent shot accumulates 200+
+                        val isPerfect = totalGravityAssist < 150f
                         if (isPerfect) {
                             perfectStreak++
                             multiplier = (perfectStreak + 1).coerceAtMost(5)
