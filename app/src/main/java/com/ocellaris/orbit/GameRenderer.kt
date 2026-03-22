@@ -329,29 +329,31 @@ fun GameRenderer() {
             }
         }
 
-        // Name entry overlay
-        if (phaseState == Phase.NAME_ENTRY) {
-            NameEntryOverlay(
-                score = gameState.score,
-                initialName = playerName,
-                soundEngine = soundEngine,
-                onSubmit = { name ->
-                    val trimmed = name.uppercase().take(3).ifEmpty { "???" }
-                    playerName = trimmed
-                    leaderboard.addEntry(trimmed, gameState.score)
-                    leaderboard.setLastName(trimmed)
-                    gameState.submitName()
-                }
-            )
-        }
-
-        // Game over overlay with leaderboard
+        // Game over — name entry if qualifies, then leaderboard
         if (phaseState == Phase.GAME_OVER) {
-            GameOverOverlay(
-                score = gameState.score,
-                leaderboard = leaderboard,
-                onRetry = { gameState.onTap() }
-            )
+            var nameSubmitted by remember(gameState.frameCount) { mutableStateOf(false) }
+            val qualifies = gameState.score > 0 && leaderboard.isHighScore(gameState.score) && !nameSubmitted
+
+            if (qualifies) {
+                NameEntryOverlay(
+                    score = gameState.score,
+                    initialName = playerName,
+                    soundEngine = soundEngine,
+                    onSubmit = { name ->
+                        val trimmed = name.uppercase().take(3).ifEmpty { "???" }
+                        playerName = trimmed
+                        leaderboard.addEntry(trimmed, gameState.score)
+                        leaderboard.setLastName(trimmed)
+                        nameSubmitted = true
+                    }
+                )
+            } else {
+                GameOverOverlay(
+                    score = gameState.score,
+                    leaderboard = leaderboard,
+                    onRetry = { gameState.onTap() }
+                )
+            }
         }
     }
 }

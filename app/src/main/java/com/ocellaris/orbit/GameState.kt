@@ -281,12 +281,7 @@ class GameState(private val context: Context) {
                 val margin = 100f
                 if (dotX < -margin || dotX > screenWidth + margin ||
                     dotY < -margin || dotY > screenHeight + margin) {
-                    // Go to name entry if score > 0, otherwise straight to game over
-                    if (score > 0) {
-                        phase = Phase.NAME_ENTRY
-                    } else {
-                        phase = Phase.GAME_OVER
-                    }
+                    phase = Phase.GAME_OVER
                     gameOverAlpha = 0f
                 }
             }
