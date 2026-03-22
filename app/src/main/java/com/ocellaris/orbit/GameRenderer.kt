@@ -50,6 +50,14 @@ fun GameRenderer() {
         }
     }
 
+    // Read reactive state to trigger recomposition
+    val frame = gameState.frameCount
+    val dotXState = gameState.dotX
+    val dotYState = gameState.dotY
+    val phaseState = gameState.phase
+    val scoreState = gameState.score
+    val currentOrbitState = gameState.currentOrbitIndex
+
     Canvas(
         modifier = Modifier
             .fillMaxSize()
@@ -109,7 +117,7 @@ fun GameRenderer() {
             if (isNext) {
                 drawCircle(
                     color = cyanColor.copy(alpha = 0.1f),
-                    radius = point.captureRadius + point.radius * 0.3f,
+                    radius = point.captureRadius + point.radius,
                     center = Offset(point.x, point.y),
                     style = Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)))
                 )
@@ -123,6 +131,25 @@ fun GameRenderer() {
                 radius = p.size,
                 center = Offset(p.x, p.y)
             )
+        }
+
+        // Draw trajectory preview while orbiting
+        if (gameState.phase == Phase.ORBITING || gameState.phase == Phase.READY) {
+            val tangentX = -sin(gameState.dotAngle)
+            val tangentY = cos(gameState.dotAngle)
+            // Draw dotted line showing release direction
+            for (i in 1..12) {
+                val dist = i * 25f
+                val alpha = (1f - i / 12f) * 0.25f
+                drawCircle(
+                    color = whiteColor.copy(alpha = alpha),
+                    radius = 2f,
+                    center = Offset(
+                        gameState.dotX + tangentX * dist,
+                        gameState.dotY + tangentY * dist
+                    )
+                )
+            }
         }
 
         // Draw dot

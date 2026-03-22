@@ -2,13 +2,16 @@ package com.ocellaris.orbit
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import kotlin.math.*
 
 data class OrbitPoint(
     val x: Float,
     val y: Float,
-    val radius: Float = 120f,  // orbit radius
-    val captureRadius: Float = 60f  // how close the dot needs to be to get captured
+    val radius: Float = 120f,
+    val captureRadius: Float = 60f
 )
 
 data class Particle(
@@ -19,69 +22,59 @@ data class Particle(
 )
 
 enum class Phase {
-    READY,      // waiting for first tap
-    ORBITING,   // dot is orbiting a point
-    TRAVELING,  // dot released, flying in a line
-    GAME_OVER   // missed — show score
+    READY, ORBITING, TRAVELING, GAME_OVER
 }
 
 class GameState(private val context: Context) {
 
-    // Screen dimensions (set on first frame)
     var screenWidth = 0f
     var screenHeight = 0f
 
-    // Game phase
-    var phase = Phase.READY
+    // Frame counter — Compose reads this to trigger recomposition
+    var frameCount by mutableStateOf(0L)
         private set
 
-    // Score
-    var score = 0
+    var phase by mutableStateOf(Phase.READY)
         private set
-    var highScore = 0
+    var score by mutableStateOf(0)
         private set
-    var multiplier = 1
+    var highScore by mutableStateOf(0)
+        private set
+    var multiplier by mutableStateOf(1)
         private set
     var perfectStreak = 0
         private set
 
-    // Orbit points
     val orbitPoints = mutableListOf<OrbitPoint>()
-    var currentOrbitIndex = 0
+    var currentOrbitIndex by mutableStateOf(0)
         private set
 
-    // Dot state
-    var dotX = 0f
+    var dotX by mutableStateOf(0f)
         private set
-    var dotY = 0f
+    var dotY by mutableStateOf(0f)
         private set
-    var dotAngle = 0f  // radians, position on orbit
+    var dotAngle = 0f
         private set
-    var orbitSpeed = 2.5f  // radians per second
+    var orbitSpeed = 1.8f
         private set
 
-    // Traveling state
     var travelVX = 0f
         private set
     var travelVY = 0f
         private set
-    private val travelSpeed = 800f  // pixels per second base speed
+    private val travelSpeed = 800f
 
-    // Particles (trail)
     val particles = mutableListOf<Particle>()
-    private var particleTimer = 0f
 
-    // Visual effects
-    var catchFlashAlpha = 0f
+    var catchFlashAlpha by mutableStateOf(0f)
         private set
-    var gameOverAlpha = 0f
+    var gameOverAlpha by mutableStateOf(0f)
         private set
-    var showPerfect = false
+    var showPerfect by mutableStateOf(false)
         private set
-    var perfectAlpha = 0f
+    var perfectAlpha by mutableStateOf(0f)
         private set
 
-    // Prefs
     private val prefs: SharedPreferences =
         context.getSharedPreferences("orbit_prefs", Context.MODE_PRIVATE)
 
@@ -100,7 +93,7 @@ class GameState(private val context: Context) {
         score = 0
         multiplier = 1
         perfectStreak = 0
-        orbitSpeed = 2.5f
+        orbitSpeed = 1.8f
         orbitPoints.clear()
         particles.clear()
         currentOrbitIndex = 0
@@ -109,40 +102,73 @@ class GameState(private val context: Context) {
         showPerfect = false
         perfectAlpha = 0f
 
-        // Create initial orbit points
         val centerX = screenWidth / 2f
         val centerY = screenHeight / 2f
-        orbitPoints.add(OrbitPoint(centerX, centerY))
+        orbitPoints.add(OrbitPoint(centerX, centerY, radius = 120f, captureRadius = 120f))
+        // First few points are very easy — placed directly above/right
+        generateEasyPoints(3)
+        generateNextPoints(3)
 
-        // Generate a chain of orbit points
-        generateNextPoints(5)
-
-        // Position dot on first orbit
         dotAngle = 0f
         val first = orbitPoints[0]
         dotX = first.x + first.radius * cos(dotAngle)
         dotY = first.y + first.radius * sin(dotAngle)
     }
 
+    private fun generateEasyPoints(count: Int) {
+        // Place points in a simple ascending pattern — easy to reach from any release angle
+        val rng = java.util.Random()
+        for (i in 0 until count) {
+            val last = orbitPoints.last()
+            // Place at a fixed comfortable distance, alternating left-right
+            val offsetX = if (i % 2 == 0) 200f else -200f
+            val offsetY = -200f - rng.nextFloat() * 100f  // always upward
+
+            var nx = last.x + offsetX + (rng.nextFloat() - 0.5f) * 50f
+            var ny = last.y + offsetY
+
+            val pad = 180f
+            nx = nx.coerceIn(pad, screenWidth - pad)
+            ny = ny.coerceIn(pad, screenHeight - pad)
+
+            // Very large capture zone for easy points
+            orbitPoints.add(OrbitPoint(nx, ny, radius = 110f, captureRadius = 130f))
+        }
+    }
+
     private fun generateNextPoints(count: Int) {
         val rng = java.util.Random()
         for (i in 0 until count) {
             val last = orbitPoints.last()
-            // Place next point at a reachable distance and random-ish angle
-            val angle = rng.nextFloat() * PI.toFloat() * 2f
-            val distance = last.radius + 100f + rng.nextFloat() * 200f
+            
+            // Pick a random point on the current orbit circle as the "release point"
+            val releaseAngle = rng.nextFloat() * PI.toFloat() * 2f
+            val releaseX = last.x + last.radius * cos(releaseAngle)
+            val releaseY = last.y + last.radius * sin(releaseAngle)
+            
+            // Tangent direction at that release point (clockwise orbit)
+            val tangentX = -sin(releaseAngle)
+            val tangentY = cos(releaseAngle)
+            
+            // Place the next orbit point along this tangent line
+            // at a comfortable distance (not too far, not too close)
+            val distance = 250f + rng.nextFloat() * 150f
+            
+            // Add some perpendicular offset for variety (but keep it catchable)
+            val perpX = cos(releaseAngle)
+            val perpY = sin(releaseAngle)
+            val perpOffset = (rng.nextFloat() - 0.5f) * 100f
+            
+            var nx = releaseX + tangentX * distance + perpX * perpOffset
+            var ny = releaseY + tangentY * distance + perpY * perpOffset
 
-            var nx = last.x + distance * cos(angle)
-            var ny = last.y + distance * sin(angle)
-
-            // Clamp to screen with padding
-            val pad = 150f
+            val pad = 180f
             nx = nx.coerceIn(pad, screenWidth - pad)
             ny = ny.coerceIn(pad, screenHeight - pad)
 
-            // Vary orbit radius slightly
-            val radius = 90f + rng.nextFloat() * 60f
-            val captureRadius = 50f + rng.nextFloat() * 20f
+            val radius = 100f + rng.nextFloat() * 40f
+            // Very generous capture radius — the whole zone around the orbit center
+            val captureRadius = 100f + rng.nextFloat() * 30f
 
             orbitPoints.add(OrbitPoint(nx, ny, radius, captureRadius))
         }
@@ -154,16 +180,11 @@ class GameState(private val context: Context) {
                 phase = Phase.ORBITING
             }
             Phase.ORBITING -> {
-                // Release dot tangentially
-                val current = orbitPoints[currentOrbitIndex]
-                // Tangent direction (perpendicular to radius, clockwise)
                 travelVX = -sin(dotAngle) * travelSpeed
                 travelVY = cos(dotAngle) * travelSpeed
                 phase = Phase.TRAVELING
             }
-            Phase.TRAVELING -> {
-                // No action while traveling
-            }
+            Phase.TRAVELING -> { }
             Phase.GAME_OVER -> {
                 resetGame()
                 phase = Phase.ORBITING
@@ -172,10 +193,8 @@ class GameState(private val context: Context) {
     }
 
     fun update(dt: Float) {
-        // Update particles
         updateParticles(dt)
 
-        // Fade effects
         if (catchFlashAlpha > 0f) catchFlashAlpha = (catchFlashAlpha - dt * 3f).coerceAtLeast(0f)
         if (perfectAlpha > 0f) perfectAlpha = (perfectAlpha - dt * 2f).coerceAtLeast(0f)
         if (phase == Phase.GAME_OVER && gameOverAlpha < 1f) {
@@ -184,7 +203,6 @@ class GameState(private val context: Context) {
 
         when (phase) {
             Phase.READY -> {
-                // Idle orbit animation
                 val current = orbitPoints[currentOrbitIndex]
                 dotAngle += orbitSpeed * dt
                 dotX = current.x + current.radius * cos(dotAngle)
@@ -199,32 +217,26 @@ class GameState(private val context: Context) {
                 spawnTrailParticle()
             }
             Phase.TRAVELING -> {
-                // Move dot
                 dotX += travelVX * dt
                 dotY += travelVY * dt
 
-                // Slight deceleration
-                travelVX *= (1f - 0.3f * dt)
-                travelVY *= (1f - 0.3f * dt)
+                // Very slight deceleration — dot should travel far
+                travelVX *= (1f - 0.1f * dt)
+                travelVY *= (1f - 0.1f * dt)
 
                 spawnTrailParticle()
 
-                // Check capture by next orbit point(s)
                 val nextIndex = currentOrbitIndex + 1
                 if (nextIndex < orbitPoints.size) {
                     val next = orbitPoints[nextIndex]
                     val dist = sqrt((dotX - next.x).pow(2) + (dotY - next.y).pow(2))
 
-                    if (dist < next.captureRadius + next.radius * 0.3f) {
-                        // Captured!
+                    if (dist < next.captureRadius + next.radius) {
                         currentOrbitIndex = nextIndex
                         phase = Phase.ORBITING
-
-                        // Calculate angle for orbit position
                         dotAngle = atan2(dotY - next.y, dotX - next.x)
 
-                        // Score
-                        val isPerfect = dist < next.captureRadius * 0.5f
+                        val isPerfect = dist < next.captureRadius * 0.7f
                         if (isPerfect) {
                             perfectStreak++
                             multiplier = (perfectStreak / 2 + 1).coerceAtMost(5)
@@ -237,16 +249,12 @@ class GameState(private val context: Context) {
 
                         score += multiplier
                         catchFlashAlpha = 1f
-
-                        // Speed up
                         orbitSpeed += 0.12f
 
-                        // Generate more points if running low
                         if (currentOrbitIndex >= orbitPoints.size - 3) {
                             generateNextPoints(3)
                         }
 
-                        // Update high score
                         if (score > highScore) {
                             highScore = score
                             prefs.edit().putInt("high_score", highScore).apply()
@@ -254,7 +262,6 @@ class GameState(private val context: Context) {
                     }
                 }
 
-                // Check if off screen
                 val margin = 100f
                 if (dotX < -margin || dotX > screenWidth + margin ||
                     dotY < -margin || dotY > screenHeight + margin) {
@@ -262,10 +269,11 @@ class GameState(private val context: Context) {
                     gameOverAlpha = 0f
                 }
             }
-            Phase.GAME_OVER -> {
-                // Just animate
-            }
+            Phase.GAME_OVER -> { }
         }
+
+        // Bump frame counter to trigger Compose recomposition
+        frameCount++
     }
 
     private fun spawnTrailParticle() {
