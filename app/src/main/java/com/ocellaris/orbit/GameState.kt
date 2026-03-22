@@ -62,8 +62,8 @@ class GameState(private val context: Context) {
         private set
     var travelVY = 0f
         private set
-    private val travelSpeed = 800f
-    private val gravityStrength = 180000f  // gravity constant — pulls dot toward next orbit point
+    private val travelSpeed = 700f
+    private val gravityStrength = 900000f  // gravity constant — strong pull, visible arcs
     private var totalGravityAssist = 0f  // tracks how much gravity curved the path
 
     val particles = mutableListOf<Particle>()
@@ -112,7 +112,7 @@ class GameState(private val context: Context) {
         val rng = java.util.Random()
         val startX = screenWidth * 0.25f + rng.nextFloat() * screenWidth * 0.5f
         val startY = screenHeight * 0.5f + rng.nextFloat() * screenHeight * 0.25f
-        orbitPoints.add(OrbitPoint(startX, startY, radius = 110f, captureRadius = 120f))
+        orbitPoints.add(OrbitPoint(startX, startY, radius = 80f, captureRadius = 90f))
         generateEasyPoints(3)
         generateNextPoints(3)
 
@@ -127,15 +127,15 @@ class GameState(private val context: Context) {
         for (i in 0 until count) {
             val last = orbitPoints.last()
             val (nx, ny) = placePoint(last.x, last.y, 320f + rng.nextFloat() * 60f, rng)
-            orbitPoints.add(OrbitPoint(nx, ny, radius = 100f, captureRadius = 130f))
+            orbitPoints.add(OrbitPoint(nx, ny, radius = 75f, captureRadius = 85f))
         }
     }
 
     private fun placePoint(fromX: Float, fromY: Float, distance: Float, rng: java.util.Random): Pair<Float, Float> {
         val pad = 220f
-        // Minimum separation: must be > sum of largest radii + capture zones
-        // Orbit ~140 + capture ~130 = 270 per point, so 2*270 = 540 minimum
-        val minSep = 500f
+        // Minimum separation: sum of radii + capture zones + buffer
+        // With smaller circles (~80+90 = 170 per point), 2*170 + buffer = 400
+        val minSep = 400f
 
         var bestX = fromX
         var bestY = fromY
@@ -175,9 +175,9 @@ class GameState(private val context: Context) {
 
             val (nx, ny) = placePoint(last.x, last.y, distance, rng)
 
-            // Radius and capture shrink with difficulty
-            val radius = (100f - difficulty * 2f).coerceAtLeast(65f) + rng.nextFloat() * 20f
-            val captureRadius = (110f - difficulty * 3f).coerceAtLeast(55f) + rng.nextFloat() * 15f
+            // Smaller circles — radius shrinks with difficulty
+            val radius = (75f - difficulty * 2f).coerceAtLeast(50f) + rng.nextFloat() * 15f
+            val captureRadius = (85f - difficulty * 3f).coerceAtLeast(40f) + rng.nextFloat() * 10f
 
             orbitPoints.add(OrbitPoint(nx, ny, radius, captureRadius))
         }
@@ -213,7 +213,7 @@ class GameState(private val context: Context) {
         updateTravelTrail(dt)
 
         if (catchFlashAlpha > 0f) catchFlashAlpha = (catchFlashAlpha - dt * 3f).coerceAtLeast(0f)
-        if (perfectAlpha > 0f) perfectAlpha = (perfectAlpha - dt * 2f).coerceAtLeast(0f)
+        if (perfectAlpha > 0f) perfectAlpha = (perfectAlpha - dt * 0.7f).coerceAtLeast(0f)  // slower fade — visible ~1.5s
         if (phase == Phase.GAME_OVER && gameOverAlpha < 1f) {
             gameOverAlpha = (gameOverAlpha + dt * 3f).coerceAtMost(1f)
         }
@@ -276,9 +276,9 @@ class GameState(private val context: Context) {
                         phase = Phase.ORBITING
                         dotAngle = atan2(dotY - next.y, dotX - next.x)
 
-                        // Perfect = clean catch without much gravity rescue
-                        // Low gravity assist means you aimed well
-                        val isPerfect = totalGravityAssist < 25f
+                        // Perfect = clean catch where gravity didn't have to work hard
+                        // Higher threshold with stronger gravity — harder to get perfect
+                        val isPerfect = totalGravityAssist < 60f
                         if (isPerfect) {
                             perfectStreak++
                             multiplier = (perfectStreak + 1).coerceAtMost(5)

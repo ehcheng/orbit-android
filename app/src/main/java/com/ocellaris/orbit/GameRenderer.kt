@@ -278,14 +278,16 @@ fun GameRenderer() {
                 if (gameState.multiplier > 1) {
                     val multText = "×${gameState.multiplier}"
                     val multStyle = TextStyle(
-                        color = purpleColor.copy(alpha = 0.9f),
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Light
+                        color = purpleColor,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Light,
+                        letterSpacing = 2.sp
                     )
                     val multLayout = textMeasurer.measure(multText, multStyle)
+                    // Persistent multiplier badge — always visible when active
                     drawText(
                         textLayoutResult = multLayout,
-                        topLeft = Offset(40f, scoreY + scoreLayout.size.height + 4f)
+                        topLeft = Offset(40f, scoreY + scoreLayout.size.height + 8f)
                     )
                 }
             }
@@ -395,6 +397,7 @@ fun NameEntryOverlay(
 
     val cyanColor = Color(0xFF00E5FF)
     val purpleColor = Color(0xFFE040FB)
+    var submitted by remember { mutableStateOf(false) }
 
     fun cycleUp(slot: Int) {
         soundEngine.playTick()
@@ -543,9 +546,12 @@ fun NameEntryOverlay(
                 modifier = Modifier
                     .pointerInput(Unit) {
                         detectTapGestures {
-                            soundEngine.playConfirm()
-                            val name = "${letters[char0]}${letters[char1]}${letters[char2]}"
-                            onSubmit(name)
+                            if (!submitted) {
+                                submitted = true
+                                soundEngine.playConfirm()
+                                val name = "${letters[char0]}${letters[char1]}${letters[char2]}"
+                                onSubmit(name)
+                            }
                         }
                     }
                     .border(
