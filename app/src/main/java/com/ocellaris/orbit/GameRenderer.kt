@@ -395,19 +395,20 @@ fun AttractOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.75f))
+            .background(Color.Black.copy(alpha = 0.55f))  // lighter so demo is visible
             .pointerInput(Unit) {
                 detectTapGestures { onInsertCoin() }
-            },
-        contentAlignment = Alignment.Center
+            }
     ) {
+        // Main content — centered
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(horizontal = 32.dp)
+                .padding(top = 120.dp)
         ) {
-            Spacer(modifier = Modifier.height(40.dp))
-
             // Title
             Text(
                 text = "ORBIT",
@@ -429,7 +430,7 @@ fun AttractOverlay(
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Leaderboard
             if (entries.isNotEmpty()) {
@@ -441,7 +442,7 @@ fun AttractOverlay(
                     letterSpacing = 4.sp
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 entries.forEachIndexed { index, entry ->
                     val rankColor = when (index) {
@@ -461,14 +462,14 @@ fun AttractOverlay(
                         Text(
                             text = String.format("%2d", index + 1),
                             color = cyanColor.copy(alpha = alpha * 0.5f),
-                            fontSize = 18.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Light,
-                            modifier = Modifier.width(36.dp)
+                            modifier = Modifier.width(32.dp)
                         )
                         Text(
                             text = entry.name.take(3).padEnd(3),
                             color = rankColor.copy(alpha = alpha),
-                            fontSize = 18.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Light,
                             letterSpacing = 6.sp,
                             modifier = Modifier.weight(1f)
@@ -476,28 +477,29 @@ fun AttractOverlay(
                         Text(
                             text = String.format("%06d", entry.score),
                             color = rankColor.copy(alpha = alpha),
-                            fontSize = 18.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Light,
                             letterSpacing = 2.sp
                         )
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // INSERT COIN — always visible, pulsing
-            @Suppress("UNUSED_EXPRESSION")
-            tick  // read tick to trigger recomposition
-            val pulseAlpha = 0.3f + 0.5f * sin(System.currentTimeMillis() / 400f).toFloat()
-            Text(
-                text = "INSERT COIN",
-                color = cyanColor.copy(alpha = pulseAlpha),
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 10.sp
-            )
         }
+
+        // INSERT COIN — pinned to bottom, always visible
+        @Suppress("UNUSED_EXPRESSION")
+        tick
+        val pulseAlpha = 0.3f + 0.5f * sin(System.currentTimeMillis() / 400f).toFloat()
+        Text(
+            text = "INSERT COIN",
+            color = cyanColor.copy(alpha = pulseAlpha),
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Light,
+            letterSpacing = 10.sp,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp)
+        )
     }
 }
 

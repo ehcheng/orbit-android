@@ -72,6 +72,9 @@ class GameState(private val context: Context) {
     private var totalGravityAssist = 0f  // tracks how much gravity curved the path
     private var travelTime = 0f  // seconds since release
     private val maxTravelTime = 3.0f  // shot timeout
+    // Demo auto-play
+    private var demoOrbitTime = 0f
+    private var demoPhase = 0  // 0=orbiting, 1=traveling
     // Release snapshot for perfect detection
     private var releaseX = 0f
     private var releaseY = 0f
@@ -113,6 +116,8 @@ class GameState(private val context: Context) {
 
     fun startAttractMode() {
         phase = Phase.ATTRACT
+        demoPhase = 0
+        demoOrbitTime = 0f
         setupLevel()
     }
 
@@ -257,13 +262,74 @@ class GameState(private val context: Context) {
 
         when (phase) {
             Phase.ATTRACT -> {
-                // Demo mode — orbit the dot for visual effect
-                if (orbitPoints.isNotEmpty()) {
-                    val current = orbitPoints[currentOrbitIndex]
-                    dotAngle += orbitSpeed * 0.7f * dt
-                    dotX = current.x + current.radius * cos(dotAngle)
-                    dotY = current.y + current.radius * sin(dotAngle)
-                    spawnTrailParticle()
+                if (orbitPoints.isEmpty()) return
+                when (demoPhase) {
+                    0 -> {
+                        // Orbiting — wait 1-2 seconds then auto-release
+                        val current = orbitPoints[currentOrbitIndex]
+                        dotAngle += orbitSpeed * dt
+                        dotX = current.x + current.radius * cos(dotAngle)
+                        dotY = current.y + current.radius * sin(dotAngle)
+                        spawnTrailParticle()
+                        demoOrbitTime += dt
+                        if (demoOrbitTime > 1.2f) {
+                            // Auto-release
+                            travelVX = -sin(dotAngle) * travelSpeed
+                            travelVY = cos(dotAngle) * travelSpeed
+                            travelTime = 0f
+                            demoPhase = 1
+                        }
+                    }
+                    1 -> {
+                        // Traveling with gravity — same physics as real game
+                        val nextIndex = currentOrbitIndex + 1
+                        if (nextIndex < orbitPoints.size) {
+                            val next = orbitPoints[nextIndex]
+                            val dx = next.x - dotX
+                            val dy = next.y - dotY
+                            val dist = sqrt(dx * dx + dy * dy).coerceAtLeast(30f)
+                            val refDist = 300f
+                            val accel = gravityStrength * (refDist / dist).coerceAtMost(4f)
+                            travelVX += (dx / dist) * accel * dt
+                            travelVY += (dy / dist) * accel * dt
+                        }
+
+                        dotX += travelVX * dt
+                        dotY += travelVY * dt
+                        travelTime += dt
+                        travelVX *= (1f - 0.02f * dt)
+                        travelVY *= (1f - 0.02f * dt)
+                        spawnTrailParticle()
+                        travelTrail.add(Particle(dotX, dotY, alpha = 1f, size = 3f))
+
+                        // Check catch
+                        if (nextIndex < orbitPoints.size) {
+                            val next = orbitPoints[nextIndex]
+                            val dist = sqrt((dotX - next.x).pow(2) + (dotY - next.y).pow(2))
+                            if (dist < next.radius + 30f) {
+                                // Caught! Move to next orbit
+                                currentOrbitIndex = nextIndex
+                                dotAngle = atan2(dotY - next.y, dotX - next.x)
+                                catchFlashAlpha = 1f
+                                demoPhase = 0
+                                demoOrbitTime = 0f
+                                if (currentOrbitIndex >= orbitPoints.size - 3) {
+                                    generateNextPoints(3)
+                                }
+                            }
+                        }
+
+                        // Miss or timeout — restart demo
+                        val margin = 150f
+                        if (dotX < -margin || dotX > screenWidth + margin ||
+                            dotY < -margin || dotY > screenHeight + margin ||
+                            travelTime > maxTravelTime) {
+                            // Reset demo
+                            setupLevel()
+                            demoPhase = 0
+                            demoOrbitTime = 0f
+                        }
+                    }
                 }
             }
             Phase.READY -> {
