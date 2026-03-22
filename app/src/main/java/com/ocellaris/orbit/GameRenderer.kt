@@ -61,7 +61,7 @@ fun GameRenderer() {
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(15)
                 if (gameState.showPerfect) {
-                    soundEngine.playPerfect()
+                    soundEngine.playPerfect(gameState.multiplier)
                 } else {
                     soundEngine.playCatch()
                 }

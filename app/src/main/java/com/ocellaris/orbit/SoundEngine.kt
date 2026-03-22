@@ -4,7 +4,10 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import kotlinx.coroutines.*
-import kotlin.math.*
+import kotlin.math.PI
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Synthesized retro arcade sounds. No sample files needed.
@@ -67,24 +70,30 @@ class SoundEngine {
 
     // ---- GAME SOUNDS ----
 
-    /** Orbit catch — rising arpeggio blip */
+    /** Normal catch — sparkly arpeggio (the pleasing one) */
     fun playCatch() {
-        val samples = generate(120) { t ->
-            val freq = 400f + t * 3000f  // rising pitch
-            val env = (1f - t * 8.3f).coerceAtLeast(0f)  // quick decay
-            square(freq, t) * env * 0.4f + sine(freq * 2f, t) * env * 0.2f
-        }
-        play(samples)
-    }
-
-    /** Perfect catch — higher, sparkly arpeggio */
-    fun playPerfect() {
         val samples = generate(200) { t ->
             val step = (t * 15).toInt()
             val freqs = floatArrayOf(523f, 659f, 784f, 1047f, 1319f)
             val freq = freqs[(step % freqs.size)]
             val env = (1f - t * 5f).coerceAtLeast(0f)
             sine(freq, t) * env * 0.3f + square(freq, t) * env * 0.15f
+        }
+        play(samples)
+    }
+
+    /** Perfect catch — rising blip, pitch goes up a half step per multiplier
+     *  multiplier 1 = base, 2 = +1 half step, ... 5 = +4 half steps */
+    fun playPerfect(multiplier: Int = 1) {
+        // Half step ratio = 2^(1/12) ≈ 1.05946
+        val halfStep = 2f.pow(1f / 12f)
+        val pitchMult = halfStep.pow((multiplier - 1).coerceIn(0, 4).toFloat())
+        val baseFreq = 400f * pitchMult
+
+        val samples = generate(150) { t ->
+            val freq = baseFreq + t * 3000f * pitchMult
+            val env = (1f - t * 6.7f).coerceAtLeast(0f)
+            square(freq, t) * env * 0.4f + sine(freq * 2f, t) * env * 0.2f
         }
         play(samples)
     }
