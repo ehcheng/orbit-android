@@ -22,7 +22,7 @@ data class Particle(
 )
 
 enum class Phase {
-    READY, ORBITING, TRAVELING, GAME_OVER
+    READY, ORBITING, TRAVELING, NAME_ENTRY, GAME_OVER
 }
 
 class GameState(private val context: Context) {
@@ -185,11 +185,17 @@ class GameState(private val context: Context) {
                 phase = Phase.TRAVELING
             }
             Phase.TRAVELING -> { }
+            Phase.NAME_ENTRY -> { /* handled by UI */ }
             Phase.GAME_OVER -> {
                 resetGame()
                 phase = Phase.ORBITING
             }
         }
+    }
+
+    fun submitName() {
+        phase = Phase.GAME_OVER
+        gameOverAlpha = 0f
     }
 
     fun update(dt: Float) {
@@ -265,10 +271,16 @@ class GameState(private val context: Context) {
                 val margin = 100f
                 if (dotX < -margin || dotX > screenWidth + margin ||
                     dotY < -margin || dotY > screenHeight + margin) {
-                    phase = Phase.GAME_OVER
+                    // Go to name entry if score > 0, otherwise straight to game over
+                    if (score > 0) {
+                        phase = Phase.NAME_ENTRY
+                    } else {
+                        phase = Phase.GAME_OVER
+                    }
                     gameOverAlpha = 0f
                 }
             }
+            Phase.NAME_ENTRY -> { /* waiting for input */ }
             Phase.GAME_OVER -> { }
         }
 
