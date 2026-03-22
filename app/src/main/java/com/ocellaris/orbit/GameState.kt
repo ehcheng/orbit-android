@@ -22,7 +22,12 @@ data class Particle(
 )
 
 enum class Phase {
-    READY, ORBITING, TRAVELING, NAME_ENTRY, GAME_OVER
+    ATTRACT,     // title screen — leaderboard + demo gameplay
+    READY,       // waiting for first tap
+    ORBITING,    // dot orbiting a point
+    TRAVELING,   // dot released, flying
+    NAME_ENTRY,  // entering initials (top 10 score)
+    GAME_OVER    // showing leaderboard, tap to restart
 }
 
 class GameState(private val context: Context) {
@@ -94,14 +99,27 @@ class GameState(private val context: Context) {
         highScore = prefs.getInt("high_score", 0)
     }
 
+    var isNewHighScore by mutableStateOf(false)
+        private set
+
     fun initGame(width: Float, height: Float) {
         screenWidth = width
         screenHeight = height
-        resetGame()
+        startAttractMode()
+    }
+
+    fun startAttractMode() {
+        phase = Phase.ATTRACT
+        setupLevel()
     }
 
     fun resetGame() {
         phase = Phase.READY
+        isNewHighScore = false
+        setupLevel()
+    }
+
+    private fun setupLevel() {
         score = 0
         multiplier = 1
         perfectStreak = 0
@@ -115,7 +133,6 @@ class GameState(private val context: Context) {
         showPerfect = false
         perfectAlpha = 0f
 
-        // Randomize starting position each game
         val rng = java.util.Random()
         val startX = screenWidth * 0.25f + rng.nextFloat() * screenWidth * 0.5f
         val startY = screenHeight * 0.5f + rng.nextFloat() * screenHeight * 0.25f
@@ -192,6 +209,10 @@ class GameState(private val context: Context) {
 
     fun onTap() {
         when (phase) {
+            Phase.ATTRACT -> {
+                resetGame()
+                phase = Phase.ORBITING
+            }
             Phase.READY -> {
                 phase = Phase.ORBITING
             }
@@ -200,7 +221,6 @@ class GameState(private val context: Context) {
                 travelVY = cos(dotAngle) * travelSpeed
                 totalGravityAssist = 0f
                 travelTime = 0f
-                // Snapshot release position + direction for perfect calc
                 releaseX = dotX
                 releaseY = dotY
                 val speed = sqrt(travelVX * travelVX + travelVY * travelVY)
@@ -209,15 +229,15 @@ class GameState(private val context: Context) {
                 phase = Phase.TRAVELING
             }
             Phase.TRAVELING -> { }
-            Phase.NAME_ENTRY -> { /* handled by UI */ }
+            Phase.NAME_ENTRY -> { /* handled by UI overlay */ }
             Phase.GAME_OVER -> {
-                resetGame()
-                phase = Phase.ORBITING
+                startAttractMode()
             }
         }
     }
 
-    fun submitName() {
+    /** Called from UI after name entry is submitted */
+    fun nameSubmitted() {
         phase = Phase.GAME_OVER
         gameOverAlpha = 0f
     }
@@ -233,6 +253,16 @@ class GameState(private val context: Context) {
         }
 
         when (phase) {
+            Phase.ATTRACT -> {
+                // Demo mode — orbit the dot for visual effect
+                if (orbitPoints.isNotEmpty()) {
+                    val current = orbitPoints[currentOrbitIndex]
+                    dotAngle += orbitSpeed * 0.7f * dt
+                    dotX = current.x + current.radius * cos(dotAngle)
+                    dotY = current.y + current.radius * sin(dotAngle)
+                    spawnTrailParticle()
+                }
+            }
             Phase.READY -> {
                 val current = orbitPoints[currentOrbitIndex]
                 dotAngle += orbitSpeed * dt
@@ -338,9 +368,15 @@ class GameState(private val context: Context) {
                 if (dotX < -margin || dotX > screenWidth + margin ||
                     dotY < -margin || dotY > screenHeight + margin ||
                     travelTime > maxTravelTime) {
-                    phase = Phase.GAME_OVER
-                    gameOverAlpha = 0f
                     totalGravityAssist = 0f
+                    if (score > 0) {
+                        // Check if score qualifies for leaderboard — done in renderer
+                        isNewHighScore = true
+                        phase = Phase.NAME_ENTRY
+                    } else {
+                        phase = Phase.GAME_OVER
+                    }
+                    gameOverAlpha = 0f
                 }
             }
             Phase.NAME_ENTRY -> { /* waiting for input */ }

@@ -70,8 +70,8 @@ fun GameRenderer() {
             if (currentPhase != lastPhase) {
                 when {
                     currentPhase == Phase.TRAVELING && lastPhase == Phase.ORBITING -> soundEngine.playRelease()
+                    currentPhase == Phase.ORBITING && lastPhase == Phase.ATTRACT -> soundEngine.playStart()
                     currentPhase == Phase.ORBITING && lastPhase == Phase.READY -> soundEngine.playStart()
-                    currentPhase == Phase.ORBITING && lastPhase == Phase.GAME_OVER -> soundEngine.playStart()
                     (currentPhase == Phase.GAME_OVER || currentPhase == Phase.NAME_ENTRY) &&
                         lastPhase == Phase.TRAVELING -> soundEngine.playGameOver()
                 }
@@ -200,7 +200,8 @@ fun GameRenderer() {
             }
 
             // Draw dot — layered glow for bloom effect
-            if (gameState.phase != Phase.GAME_OVER && gameState.phase != Phase.NAME_ENTRY) {
+            if (gameState.phase == Phase.ATTRACT || gameState.phase == Phase.READY ||
+                gameState.phase == Phase.ORBITING || gameState.phase == Phase.TRAVELING) {
                 // Wide faint glow
                 drawCircle(
                     color = cyanColor.copy(alpha = 0.1f),
@@ -248,8 +249,8 @@ fun GameRenderer() {
                 }
             }
 
-            // Score (top-left) — arcade zero-padded
-            if (gameState.phase != Phase.GAME_OVER && gameState.phase != Phase.NAME_ENTRY) {
+            // Score (top-left) — arcade zero-padded (only during active play)
+            if (gameState.phase == Phase.ORBITING || gameState.phase == Phase.TRAVELING) {
                 val scoreText = String.format("%06d", gameState.score)
                 val scoreStyle = TextStyle(
                     color = whiteColor.copy(alpha = 0.85f),
@@ -331,52 +332,145 @@ fun GameRenderer() {
                 )
             }
 
-            // Ready state
-            if (gameState.phase == Phase.READY) {
-                val tapStyle = TextStyle(
-                    color = dimCyan.copy(
-                        alpha = 0.5f + 0.3f * sin(System.currentTimeMillis() / 500f).toFloat()
-                    ),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Light,
-                    letterSpacing = 6.sp
-                )
-                val tapLayout = textMeasurer.measure("TAP TO START", tapStyle)
-                drawText(
-                    textLayoutResult = tapLayout,
-                    topLeft = Offset(
-                        (size.width - tapLayout.size.width) / 2f,
-                        size.height * 0.7f
-                    )
-                )
-            }
+            // No ready state text — attract overlay handles INSERT COIN
         }
 
-        // Game over — name entry if qualifies, then leaderboard
-        if (phaseState == Phase.GAME_OVER) {
-            var nameSubmitted by remember(gameState.frameCount) { mutableStateOf(false) }
-            val qualifies = gameState.score > 0 && leaderboard.isHighScore(gameState.score) && !nameSubmitted
+        // Attract mode — leaderboard + INSERT COIN over demo gameplay
+        if (phaseState == Phase.ATTRACT) {
+            AttractOverlay(
+                leaderboard = leaderboard,
+                onInsertCoin = { gameState.onTap() }
+            )
+        }
 
-            if (qualifies) {
-                NameEntryOverlay(
-                    score = gameState.score,
-                    initialName = playerName,
-                    soundEngine = soundEngine,
-                    onSubmit = { name ->
-                        val trimmed = name.uppercase().take(3).ifEmpty { "???" }
-                        playerName = trimmed
-                        leaderboard.addEntry(trimmed, gameState.score)
-                        leaderboard.setLastName(trimmed)
-                        nameSubmitted = true
+        // Name entry — proper phase, no state hacks
+        if (phaseState == Phase.NAME_ENTRY) {
+            NameEntryOverlay(
+                score = gameState.score,
+                initialName = playerName,
+                soundEngine = soundEngine,
+                onSubmit = { name ->
+                    val trimmed = name.uppercase().take(3).ifEmpty { "???" }
+                    playerName = trimmed
+                    leaderboard.addEntry(trimmed, gameState.score)
+                    leaderboard.setLastName(trimmed)
+                    gameState.nameSubmitted()
+                }
+            )
+        }
+
+        // Game over — show leaderboard, tap goes to attract
+        if (phaseState == Phase.GAME_OVER) {
+            GameOverOverlay(
+                score = gameState.score,
+                leaderboard = leaderboard,
+                onRetry = { gameState.onTap() }
+            )
+        }
+    }
+}
+
+@Composable
+fun AttractOverlay(
+    leaderboard: Leaderboard,
+    onInsertCoin: () -> Unit
+) {
+    val entries = remember { leaderboard.getEntries() }
+    val cyanColor = Color(0xFF00E5FF)
+    val purpleColor = Color(0xFFE040FB)
+    val yellowColor = Color(0xFFFFD600)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .pointerInput(Unit) {
+                detectTapGestures { onInsertCoin() }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 32.dp)
+        ) {
+            Spacer(modifier = Modifier.height(40.dp))
+
+            // Title
+            Text(
+                text = "ORBIT",
+                color = cyanColor,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Thin,
+                letterSpacing = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Leaderboard
+            if (entries.isNotEmpty()) {
+                Text(
+                    text = "─── HIGH SCORES ───",
+                    color = cyanColor.copy(alpha = 0.4f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 4.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                entries.forEachIndexed { index, entry ->
+                    val rankColor = when (index) {
+                        0 -> yellowColor
+                        1 -> Color(0xFFB0BEC5)
+                        2 -> Color(0xFFFF8A65)
+                        else -> Color.White
                     }
-                )
-            } else {
-                GameOverOverlay(
-                    score = gameState.score,
-                    leaderboard = leaderboard,
-                    onRetry = { gameState.onTap() }
-                )
+                    val alpha = (0.8f - index * 0.05f).coerceAtLeast(0.3f)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth(0.75f)
+                            .padding(vertical = 1.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = String.format("%2d", index + 1),
+                            color = cyanColor.copy(alpha = alpha * 0.5f),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Light,
+                            modifier = Modifier.width(36.dp)
+                        )
+                        Text(
+                            text = entry.name.take(3).padEnd(3),
+                            color = rankColor.copy(alpha = alpha),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Light,
+                            letterSpacing = 6.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = String.format("%06d", entry.score),
+                            color = rankColor.copy(alpha = alpha),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Light,
+                            letterSpacing = 2.sp
+                        )
+                    }
+                }
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // INSERT COIN — pulsing
+            val pulseAlpha = 0.3f + 0.5f * sin(System.currentTimeMillis() / 400f).toFloat()
+            Text(
+                text = "INSERT COIN",
+                color = cyanColor.copy(alpha = pulseAlpha),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Light,
+                letterSpacing = 10.sp
+            )
         }
     }
 }
