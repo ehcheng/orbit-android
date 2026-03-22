@@ -117,19 +117,14 @@ fun GameRenderer() {
                 )
 
                 if (isNext) {
-                    // Capture zone — soft glow
+                    // Capture zone — subtle dashed ring only (no fill)
                     drawCircle(
-                        color = cyanColor.copy(alpha = 0.08f),
-                        radius = point.captureRadius + point.radius,
-                        center = Offset(point.x, point.y)
-                    )
-                    drawCircle(
-                        color = cyanColor.copy(alpha = 0.15f),
+                        color = cyanColor.copy(alpha = 0.12f),
                         radius = point.captureRadius + point.radius,
                         center = Offset(point.x, point.y),
                         style = Stroke(
-                            width = 1.5f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
+                            width = 1f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 12f))
                         )
                     )
                 }
@@ -191,6 +186,20 @@ fun GameRenderer() {
                         )
                     )
                 }
+            }
+
+            // Draw persistent travel trail (the path the dot actually flew)
+            for (p in gameState.travelTrail) {
+                drawCircle(
+                    color = cyanColor.copy(alpha = p.alpha * 0.5f),
+                    radius = p.size + 2f,
+                    center = Offset(p.x, p.y)
+                )
+                drawCircle(
+                    color = whiteColor.copy(alpha = p.alpha * 0.3f),
+                    radius = p.size,
+                    center = Offset(p.x, p.y)
+                )
             }
 
             // Draw particles (trail)

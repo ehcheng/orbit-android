@@ -66,6 +66,9 @@ class GameState(private val context: Context) {
 
     val particles = mutableListOf<Particle>()
 
+    // Persistent trail — the path the dot actually traveled (stays on screen longer)
+    val travelTrail = mutableListOf<Particle>()
+
     var catchFlashAlpha by mutableStateOf(0f)
         private set
     var gameOverAlpha by mutableStateOf(0f)
@@ -96,6 +99,7 @@ class GameState(private val context: Context) {
         orbitSpeed = 1.8f
         orbitPoints.clear()
         particles.clear()
+        travelTrail.clear()
         currentOrbitIndex = 0
         catchFlashAlpha = 0f
         gameOverAlpha = 0f
@@ -116,59 +120,59 @@ class GameState(private val context: Context) {
     }
 
     private fun generateEasyPoints(count: Int) {
-        // Place points in a simple ascending pattern — easy to reach from any release angle
-        val rng = java.util.Random()
+        // Zigzag pattern — guaranteed well-spaced
         for (i in 0 until count) {
             val last = orbitPoints.last()
-            // Place at a fixed comfortable distance, alternating left-right
-            val offsetX = if (i % 2 == 0) 200f else -200f
-            val offsetY = -200f - rng.nextFloat() * 100f  // always upward
+            val goRight = i % 2 == 0
+            val nx = if (goRight) {
+                (last.x + 300f).coerceAtMost(screenWidth - 200f)
+            } else {
+                (last.x - 300f).coerceAtLeast(200f)
+            }
+            val ny = (last.y - 350f).coerceAtLeast(200f)
 
-            var nx = last.x + offsetX + (rng.nextFloat() - 0.5f) * 50f
-            var ny = last.y + offsetY
-
-            val pad = 180f
-            nx = nx.coerceIn(pad, screenWidth - pad)
-            ny = ny.coerceIn(pad, screenHeight - pad)
-
-            // Very large capture zone for easy points
-            orbitPoints.add(OrbitPoint(nx, ny, radius = 110f, captureRadius = 130f))
+            orbitPoints.add(OrbitPoint(nx, ny, radius = 100f, captureRadius = 130f))
         }
+    }
+
+    private fun placePoint(fromX: Float, fromY: Float, distance: Float, rng: java.util.Random): Pair<Float, Float> {
+        val pad = 200f
+        val minSep = 350f  // minimum center-to-center distance
+
+        for (attempt in 0 until 20) {
+            val angle = rng.nextFloat() * PI.toFloat() * 2f
+            val d = distance + rng.nextFloat() * 100f
+            val nx = (fromX + d * cos(angle)).coerceIn(pad, screenWidth - pad)
+            val ny = (fromY + d * sin(angle)).coerceIn(pad, screenHeight - pad)
+
+            // Check against ALL existing points
+            val tooClose = orbitPoints.any { existing ->
+                sqrt((nx - existing.x).pow(2) + (ny - existing.y).pow(2)) < minSep
+            }
+            if (!tooClose) return Pair(nx, ny)
+        }
+        // Fallback — just place it at distance even if slightly close
+        val angle = rng.nextFloat() * PI.toFloat() * 2f
+        return Pair(
+            (fromX + distance * cos(angle)).coerceIn(pad, screenWidth - pad),
+            (fromY + distance * sin(angle)).coerceIn(pad, screenHeight - pad)
+        )
     }
 
     private fun generateNextPoints(count: Int) {
         val rng = java.util.Random()
         for (i in 0 until count) {
             val last = orbitPoints.last()
-            
-            // Pick a random point on the current orbit circle as the "release point"
-            val releaseAngle = rng.nextFloat() * PI.toFloat() * 2f
-            val releaseX = last.x + last.radius * cos(releaseAngle)
-            val releaseY = last.y + last.radius * sin(releaseAngle)
-            
-            // Tangent direction at that release point (clockwise orbit)
-            val tangentX = -sin(releaseAngle)
-            val tangentY = cos(releaseAngle)
-            
-            // Place the next orbit point along this tangent line
-            // at a comfortable distance (not too far, not too close)
-            val distance = 250f + rng.nextFloat() * 150f
-            
-            // Add some perpendicular offset for variety (but keep it catchable)
-            val perpX = cos(releaseAngle)
-            val perpY = sin(releaseAngle)
-            val perpOffset = (rng.nextFloat() - 0.5f) * 100f
-            
-            var nx = releaseX + tangentX * distance + perpX * perpOffset
-            var ny = releaseY + tangentY * distance + perpY * perpOffset
+            val difficulty = (orbitPoints.size - 4).coerceAtLeast(0)
 
-            val pad = 180f
-            nx = nx.coerceIn(pad, screenWidth - pad)
-            ny = ny.coerceIn(pad, screenHeight - pad)
+            // Distance increases with difficulty
+            val distance = 350f + difficulty * 20f
 
-            val radius = 100f + rng.nextFloat() * 40f
-            // Very generous capture radius — the whole zone around the orbit center
-            val captureRadius = 100f + rng.nextFloat() * 30f
+            val (nx, ny) = placePoint(last.x, last.y, distance, rng)
+
+            // Radius and capture shrink with difficulty
+            val radius = (100f - difficulty * 2f).coerceAtLeast(65f) + rng.nextFloat() * 20f
+            val captureRadius = (110f - difficulty * 3f).coerceAtLeast(55f) + rng.nextFloat() * 15f
 
             orbitPoints.add(OrbitPoint(nx, ny, radius, captureRadius))
         }
@@ -200,6 +204,7 @@ class GameState(private val context: Context) {
 
     fun update(dt: Float) {
         updateParticles(dt)
+        updateTravelTrail(dt)
 
         if (catchFlashAlpha > 0f) catchFlashAlpha = (catchFlashAlpha - dt * 3f).coerceAtLeast(0f)
         if (perfectAlpha > 0f) perfectAlpha = (perfectAlpha - dt * 2f).coerceAtLeast(0f)
@@ -231,6 +236,8 @@ class GameState(private val context: Context) {
                 travelVY *= (1f - 0.1f * dt)
 
                 spawnTrailParticle()
+                // Persistent travel trail — fades slowly
+                travelTrail.add(Particle(dotX, dotY, alpha = 1f, size = 3f))
 
                 val nextIndex = currentOrbitIndex + 1
                 if (nextIndex < orbitPoints.size) {
@@ -292,6 +299,18 @@ class GameState(private val context: Context) {
         particles.add(Particle(dotX, dotY, alpha = 0.8f, size = 6f))
         if (particles.size > 60) {
             particles.removeAt(0)
+        }
+    }
+
+    private fun updateTravelTrail(dt: Float) {
+        // Very slow fade — trail stays visible for ~3 seconds
+        val iterator = travelTrail.iterator()
+        while (iterator.hasNext()) {
+            val p = iterator.next()
+            p.alpha -= dt * 0.35f
+            if (p.alpha <= 0f) {
+                iterator.remove()
+            }
         }
     }
 
