@@ -2,13 +2,11 @@ package com.ocellaris.orbit
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,11 +16,8 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.android.awaitFrame
@@ -42,7 +37,7 @@ fun GameRenderer() {
     }
 
     var lastScore by remember { mutableIntStateOf(0) }
-    var playerName by remember { mutableStateOf(leaderboard.getLastName().ifEmpty { "AAA" }) }
+    var playerName by remember { mutableStateOf(leaderboard.getLastName()) }
 
     // Game loop
     LaunchedEffect(Unit) {
@@ -309,7 +304,7 @@ fun GameRenderer() {
                 score = gameState.score,
                 initialName = playerName,
                 onSubmit = { name ->
-                    val trimmed = name.uppercase().take(8).ifEmpty { "???" }
+                    val trimmed = name.uppercase().take(3).ifEmpty { "???" }
                     playerName = trimmed
                     leaderboard.addEntry(trimmed, gameState.score)
                     leaderboard.setLastName(trimmed)
@@ -335,19 +330,28 @@ fun NameEntryOverlay(
     initialName: String,
     onSubmit: (String) -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
-    var name by remember { mutableStateOf(initialName) }
+    val letters = ('A'..'Z').toList()
+    // Parse initial name into 3 letter indices
+    val initial = initialName.uppercase().padEnd(3, 'A').take(3)
+    var char0 by remember { mutableIntStateOf((initial[0] - 'A').coerceIn(0, 25)) }
+    var char1 by remember { mutableIntStateOf((initial[1] - 'A').coerceIn(0, 25)) }
+    var char2 by remember { mutableIntStateOf((initial[2] - 'A').coerceIn(0, 25)) }
+    var activeSlot by remember { mutableIntStateOf(0) }
+
+    val cyanColor = Color(0xFF00E5FF)
+    val purpleColor = Color(0xFFE040FB)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f)),
+            .background(Color.Black.copy(alpha = 0.92f)),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Score
             Text(
                 text = "$score",
                 color = Color.White,
@@ -356,48 +360,119 @@ fun NameEntryOverlay(
             )
 
             Text(
-                text = "ENTER YOUR NAME",
-                color = Color(0xFF00E5FF).copy(alpha = 0.6f),
+                text = "NEW HIGH SCORE",
+                color = purpleColor.copy(alpha = 0.8f),
                 fontSize = 14.sp,
+                fontWeight = FontWeight.Light,
+                letterSpacing = 6.sp
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "ENTER YOUR INITIALS",
+                color = cyanColor.copy(alpha = 0.5f),
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Light,
                 letterSpacing = 4.sp
             )
 
-            BasicTextField(
-                value = name,
-                onValueChange = { name = it.uppercase().take(8) },
-                textStyle = TextStyle(
-                    color = Color.White,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Light,
-                    textAlign = TextAlign.Center,
-                    letterSpacing = 6.sp
-                ),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                        focusManager.clearFocus()
-                        onSubmit(name)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 3-character arcade picker
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val chars = listOf(char0, char1, char2)
+                for (slot in 0..2) {
+                    val isActive = slot == activeSlot
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Up arrow
+                        Text(
+                            text = "▲",
+                            color = if (isActive) cyanColor.copy(alpha = 0.8f) else cyanColor.copy(alpha = 0.2f),
+                            fontSize = 20.sp,
+                            modifier = Modifier
+                                .pointerInput(slot) {
+                                    detectTapGestures {
+                                        activeSlot = slot
+                                        val newVal = (chars[slot] + 1) % 26
+                                        when (slot) { 0 -> char0 = newVal; 1 -> char1 = newVal; 2 -> char2 = newVal }
+                                    }
+                                }
+                                .padding(8.dp)
+                        )
+
+                        // Letter
+                        Text(
+                            text = "${letters[chars[slot]]}",
+                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.6f),
+                            fontSize = 48.sp,
+                            fontWeight = FontWeight.Light,
+                            letterSpacing = 2.sp,
+                            modifier = Modifier
+                                .pointerInput(slot) {
+                                    detectTapGestures {
+                                        activeSlot = slot
+                                    }
+                                }
+                        )
+
+                        // Underline for active slot
+                        Box(
+                            modifier = Modifier
+                                .width(36.dp)
+                                .height(2.dp)
+                                .background(
+                                    if (isActive) cyanColor.copy(alpha = 0.8f)
+                                    else cyanColor.copy(alpha = 0.15f)
+                                )
+                        )
+
+                        // Down arrow
+                        Text(
+                            text = "▼",
+                            color = if (isActive) cyanColor.copy(alpha = 0.8f) else cyanColor.copy(alpha = 0.2f),
+                            fontSize = 20.sp,
+                            modifier = Modifier
+                                .pointerInput(slot) {
+                                    detectTapGestures {
+                                        activeSlot = slot
+                                        val newVal = (chars[slot] - 1 + 26) % 26
+                                        when (slot) { 0 -> char0 = newVal; 1 -> char1 = newVal; 2 -> char2 = newVal }
+                                    }
+                                }
+                                .padding(8.dp)
+                        )
                     }
-                ),
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // OK button
+            Text(
+                text = "▸  OK  ◂",
+                color = cyanColor,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Light,
+                letterSpacing = 6.sp,
                 modifier = Modifier
-                    .width(240.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            val name = "${letters[char0]}${letters[char1]}${letters[char2]}"
+                            onSubmit(name)
+                        }
+                    }
                     .border(
                         width = 1.dp,
-                        color = Color(0xFF00E5FF).copy(alpha = 0.3f),
-                        shape = RoundedCornerShape(8.dp)
+                        color = cyanColor.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(4.dp)
                     )
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                cursorBrush = SolidColor(Color(0xFF00E5FF))
-            )
-
-            Text(
-                text = "TAP DONE ON KEYBOARD",
-                color = Color(0xFF00E5FF).copy(alpha = 0.4f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 3.sp
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
             )
         }
     }
@@ -410,11 +485,14 @@ fun GameOverOverlay(
     onRetry: () -> Unit
 ) {
     val entries = remember(score) { leaderboard.getEntries() }
+    val cyanColor = Color(0xFF00E5FF)
+    val purpleColor = Color(0xFFE040FB)
+    val yellowColor = Color(0xFFFFD600)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
+            .background(Color.Black.copy(alpha = 0.92f))
             .pointerInput(Unit) {
                 detectTapGestures { onRetry() }
             },
@@ -422,86 +500,99 @@ fun GameOverOverlay(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.padding(horizontal = 32.dp)
         ) {
-            // Score
+            // GAME OVER
             Text(
-                text = "$score",
-                color = Color.White,
-                fontSize = 64.sp,
-                fontWeight = FontWeight.Thin
+                text = "GAME OVER",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Light,
+                letterSpacing = 8.sp
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            // Score
+            Text(
+                text = String.format("%06d", score),
+                color = Color.White,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Thin,
+                letterSpacing = 4.sp
+            )
 
-            // Leaderboard header
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // HIGH SCORES header
             if (entries.isNotEmpty()) {
                 Text(
-                    text = "LEADERBOARD",
-                    color = Color(0xFF00E5FF).copy(alpha = 0.5f),
+                    text = "─── HIGH SCORES ───",
+                    color = cyanColor.copy(alpha = 0.4f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Light,
-                    letterSpacing = 6.sp
+                    letterSpacing = 4.sp
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Leaderboard entries
+                // Rank  NAME  SCORE — arcade style
                 entries.forEachIndexed { index, entry ->
-                    val isCurrentScore = entry.score == score && index == entries.indexOfFirst { it.score == score }
-                    val entryColor = if (isCurrentScore) Color(0xFFE040FB) else Color.White
+                    val isLatest = entry.score == score &&
+                        entry.timestamp == entries.filter { it.score == score }.maxByOrNull { it.timestamp }?.timestamp
+                    val rankColor = when (index) {
+                        0 -> yellowColor   // Gold
+                        1 -> Color(0xFFB0BEC5) // Silver
+                        2 -> Color(0xFFFF8A65) // Bronze
+                        else -> Color.White
+                    }
+                    val nameColor = if (isLatest) purpleColor else rankColor
+                    val alpha = if (isLatest) 1f else (0.7f - index * 0.04f).coerceAtLeast(0.3f)
 
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth(0.7f)
-                            .padding(vertical = 2.dp),
+                            .fillMaxWidth(0.75f)
+                            .padding(vertical = 1.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        // Rank
                         Text(
-                            text = "${index + 1}.",
-                            color = Color(0xFF00E5FF).copy(alpha = 0.4f),
-                            fontSize = 16.sp,
+                            text = String.format("%2d", index + 1),
+                            color = cyanColor.copy(alpha = alpha * 0.5f),
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Light,
-                            modifier = Modifier.width(32.dp)
+                            modifier = Modifier.width(36.dp)
                         )
+                        // Name — 3 chars, spaced
                         Text(
-                            text = entry.name,
-                            color = entryColor.copy(alpha = 0.8f),
-                            fontSize = 16.sp,
+                            text = entry.name.take(3).padEnd(3),
+                            color = nameColor.copy(alpha = alpha),
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Light,
-                            letterSpacing = 2.sp,
+                            letterSpacing = 6.sp,
                             modifier = Modifier.weight(1f)
                         )
+                        // Score — zero-padded
                         Text(
-                            text = "${entry.score}",
-                            color = entryColor.copy(alpha = 0.9f),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Light
+                            text = String.format("%06d", entry.score),
+                            color = nameColor.copy(alpha = alpha),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Light,
+                            letterSpacing = 2.sp
                         )
                     }
                 }
-            } else {
-                // No entries yet
-                Text(
-                    text = "BEST  ${score}",
-                    color = Color(0xFF00E5FF).copy(alpha = 0.7f),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Light,
-                    letterSpacing = 3.sp
-                )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Retry prompt
-            val pulseAlpha = 0.4f + 0.3f * sin(System.currentTimeMillis() / 500f).toFloat()
+            // INSERT COIN / TAP TO RETRY
+            val pulseAlpha = 0.3f + 0.4f * sin(System.currentTimeMillis() / 400f).toFloat()
             Text(
-                text = "TAP TO RETRY",
-                color = Color(0xFF00E5FF).copy(alpha = pulseAlpha),
+                text = "INSERT COIN",
+                color = cyanColor.copy(alpha = pulseAlpha),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Light,
-                letterSpacing = 6.sp
+                letterSpacing = 8.sp
             )
         }
     }

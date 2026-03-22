@@ -49,11 +49,11 @@ class Leaderboard(context: Context) {
     }
 
     fun getLastName(): String {
-        return prefs.getString("last_name", "") ?: ""
+        return prefs.getString("last_name", "AAA") ?: "AAA"
     }
 
     fun setLastName(name: String) {
-        prefs.edit().putString("last_name", name).apply()
+        prefs.edit().putString("last_name", name.uppercase().take(3)).apply()
     }
 
     private fun save(entries: List<LeaderboardEntry>) {
