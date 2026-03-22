@@ -339,6 +339,7 @@ fun GameRenderer() {
         if (phaseState == Phase.ATTRACT) {
             AttractOverlay(
                 leaderboard = leaderboard,
+                lastGameScore = gameState.lastGameScore,
                 onInsertCoin = { gameState.onTap() }
             )
         }
@@ -373,12 +374,23 @@ fun GameRenderer() {
 @Composable
 fun AttractOverlay(
     leaderboard: Leaderboard,
+    lastGameScore: Int,  // -1 = no game played
     onInsertCoin: () -> Unit
 ) {
-    val entries = remember { leaderboard.getEntries() }
+    // Re-read entries each time attract is shown
+    val entries = leaderboard.getEntries()
     val cyanColor = Color(0xFF00E5FF)
     val purpleColor = Color(0xFFE040FB)
     val yellowColor = Color(0xFFFFD600)
+
+    // Force recomposition for pulsing animation
+    var tick by remember { mutableStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(50)
+            tick = System.currentTimeMillis()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -405,7 +417,19 @@ fun AttractOverlay(
                 letterSpacing = 16.sp
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Last game score
+            if (lastGameScore >= 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "LAST GAME  ${String.format("%06d", lastGameScore)}",
+                    color = purpleColor.copy(alpha = 0.7f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 3.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Leaderboard
             if (entries.isNotEmpty()) {
@@ -460,9 +484,11 @@ fun AttractOverlay(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // INSERT COIN — pulsing
+            // INSERT COIN — always visible, pulsing
+            @Suppress("UNUSED_EXPRESSION")
+            tick  // read tick to trigger recomposition
             val pulseAlpha = 0.3f + 0.5f * sin(System.currentTimeMillis() / 400f).toFloat()
             Text(
                 text = "INSERT COIN",

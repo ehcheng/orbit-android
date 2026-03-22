@@ -102,6 +102,8 @@ class GameState(private val context: Context) {
 
     var isNewHighScore by mutableStateOf(false)
         private set
+    var lastGameScore by mutableStateOf(-1)  // -1 = no game played yet
+        private set
 
     fun initGame(width: Float, height: Float) {
         screenWidth = width
@@ -239,6 +241,7 @@ class GameState(private val context: Context) {
 
     /** Called from UI after name entry is submitted — go straight to attract */
     fun nameSubmitted() {
+        lastGameScore = score
         startAttractMode()
     }
 
@@ -369,11 +372,11 @@ class GameState(private val context: Context) {
                     dotY < -margin || dotY > screenHeight + margin ||
                     travelTime > maxTravelTime) {
                     totalGravityAssist = 0f
+                    lastGameScore = score
                     if (score > 0 && leaderboard.isHighScore(score)) {
                         isNewHighScore = true
                         phase = Phase.NAME_ENTRY
                     } else {
-                        // Not top 10 — straight back to attract
                         startAttractMode()
                     }
                     gameOverAlpha = 0f
