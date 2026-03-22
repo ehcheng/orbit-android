@@ -257,8 +257,9 @@ fun GameRenderer() {
                     fontWeight = FontWeight.Light,
                     letterSpacing = 3.sp
                 )
+                val scoreY = 140f  // below status bar + notch area
                 val scoreLayout = textMeasurer.measure(scoreText, scoreStyle)
-                drawText(textLayoutResult = scoreLayout, topLeft = Offset(40f, 60f))
+                drawText(textLayoutResult = scoreLayout, topLeft = Offset(40f, scoreY))
 
                 // HI label + high score
                 val hiText = "HI ${String.format("%06d", gameState.highScore)}"
@@ -271,7 +272,7 @@ fun GameRenderer() {
                 val hiLayout = textMeasurer.measure(hiText, hiStyle)
                 drawText(
                     textLayoutResult = hiLayout,
-                    topLeft = Offset(size.width - hiLayout.size.width - 40f, 68f)
+                    topLeft = Offset(size.width - hiLayout.size.width - 40f, scoreY + 8f)
                 )
 
                 if (gameState.multiplier > 1) {
@@ -284,7 +285,7 @@ fun GameRenderer() {
                     val multLayout = textMeasurer.measure(multText, multStyle)
                     drawText(
                         textLayoutResult = multLayout,
-                        topLeft = Offset(40f, 100f)
+                        topLeft = Offset(40f, scoreY + scoreLayout.size.height + 4f)
                     )
                 }
             }

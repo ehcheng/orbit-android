@@ -106,10 +106,11 @@ class GameState(private val context: Context) {
         showPerfect = false
         perfectAlpha = 0f
 
-        val centerX = screenWidth / 2f
-        val centerY = screenHeight / 2f
-        orbitPoints.add(OrbitPoint(centerX, centerY, radius = 120f, captureRadius = 120f))
-        // First few points are very easy — placed directly above/right
+        // Randomize starting position each game
+        val rng = java.util.Random()
+        val startX = screenWidth * 0.25f + rng.nextFloat() * screenWidth * 0.5f
+        val startY = screenHeight * 0.5f + rng.nextFloat() * screenHeight * 0.25f
+        orbitPoints.add(OrbitPoint(startX, startY, radius = 110f, captureRadius = 120f))
         generateEasyPoints(3)
         generateNextPoints(3)
 
@@ -120,43 +121,45 @@ class GameState(private val context: Context) {
     }
 
     private fun generateEasyPoints(count: Int) {
-        // Zigzag pattern — guaranteed well-spaced
+        val rng = java.util.Random()
         for (i in 0 until count) {
             val last = orbitPoints.last()
-            val goRight = i % 2 == 0
-            val nx = if (goRight) {
-                (last.x + 300f).coerceAtMost(screenWidth - 200f)
-            } else {
-                (last.x - 300f).coerceAtLeast(200f)
-            }
-            val ny = (last.y - 350f).coerceAtLeast(200f)
-
+            val (nx, ny) = placePoint(last.x, last.y, 320f + rng.nextFloat() * 60f, rng)
             orbitPoints.add(OrbitPoint(nx, ny, radius = 100f, captureRadius = 130f))
         }
     }
 
     private fun placePoint(fromX: Float, fromY: Float, distance: Float, rng: java.util.Random): Pair<Float, Float> {
-        val pad = 200f
-        val minSep = 350f  // minimum center-to-center distance
+        val pad = 220f
+        // Minimum separation: must be > sum of largest radii + capture zones
+        // Orbit ~140 + capture ~130 = 270 per point, so 2*270 = 540 minimum
+        val minSep = 500f
 
-        for (attempt in 0 until 20) {
+        var bestX = fromX
+        var bestY = fromY
+        var bestMinDist = 0f
+
+        for (attempt in 0 until 40) {
             val angle = rng.nextFloat() * PI.toFloat() * 2f
-            val d = distance + rng.nextFloat() * 100f
+            val d = distance + rng.nextFloat() * 120f
             val nx = (fromX + d * cos(angle)).coerceIn(pad, screenWidth - pad)
             val ny = (fromY + d * sin(angle)).coerceIn(pad, screenHeight - pad)
 
-            // Check against ALL existing points
-            val tooClose = orbitPoints.any { existing ->
-                sqrt((nx - existing.x).pow(2) + (ny - existing.y).pow(2)) < minSep
+            // Find the closest existing point
+            val closestDist = orbitPoints.minOfOrNull { existing ->
+                sqrt((nx - existing.x).pow(2) + (ny - existing.y).pow(2))
+            } ?: Float.MAX_VALUE
+
+            if (closestDist >= minSep) return Pair(nx, ny)
+
+            // Track the best attempt (most separated) as fallback
+            if (closestDist > bestMinDist) {
+                bestMinDist = closestDist
+                bestX = nx
+                bestY = ny
             }
-            if (!tooClose) return Pair(nx, ny)
         }
-        // Fallback — just place it at distance even if slightly close
-        val angle = rng.nextFloat() * PI.toFloat() * 2f
-        return Pair(
-            (fromX + distance * cos(angle)).coerceIn(pad, screenWidth - pad),
-            (fromY + distance * sin(angle)).coerceIn(pad, screenHeight - pad)
-        )
+        return Pair(bestX, bestY)
     }
 
     private fun generateNextPoints(count: Int) {
