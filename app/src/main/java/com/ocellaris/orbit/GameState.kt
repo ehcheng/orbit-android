@@ -305,8 +305,8 @@ class GameState(private val context: Context) {
                         val perpX = toTargetX - releaseDirX * projLen
                         val perpY = toTargetY - releaseDirY * projLen
                         val lineToCenter = sqrt(perpX * perpX + perpY * perpY)
-                        // Perfect if the straight line passes within the orbit radius
-                        val isPerfect = lineToCenter < next.radius * 0.8f && projLen > 0f
+                        // Perfect if the straight line passes through the circle at all
+                        val isPerfect = lineToCenter < next.radius && projLen > 0f
                         if (isPerfect) {
                             perfectStreak++
                             multiplier = (perfectStreak + 1).coerceAtMost(5)
