@@ -47,7 +47,7 @@ class GameState(private val context: Context) {
         private set
     var multiplier by mutableStateOf(1)
         private set
-    var perfectStreak = 0
+    var perfectStreak by mutableStateOf(0)
         private set
 
     val orbitPoints = mutableListOf<OrbitPoint>()
@@ -93,6 +93,8 @@ class GameState(private val context: Context) {
     var showPerfect by mutableStateOf(false)
         private set
     var perfectAlpha by mutableStateOf(0f)
+        private set
+    var lastCatchWasPerfect by mutableStateOf(false)
         private set
 
     private val prefs: SharedPreferences =
@@ -406,14 +408,14 @@ class GameState(private val context: Context) {
                         val lineToCenter = sqrt(perpX * perpX + perpY * perpY)
                         // Perfect if the straight line passes through the circle at all
                         val isPerfect = lineToCenter < next.radius && projLen > 0f
+                        lastCatchWasPerfect = isPerfect
                         if (isPerfect) {
                             perfectStreak++
                             multiplier = (perfectStreak + 1).coerceAtMost(5)
                             showPerfect = true
                             perfectAlpha = 1f
                         } else {
-                            // Gravity-assisted catch — still good, but reset streak
-                            if (perfectStreak > 0) perfectStreak = 0
+                            perfectStreak = 0
                             multiplier = 1
                         }
 

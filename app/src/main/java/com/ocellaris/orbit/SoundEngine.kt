@@ -82,12 +82,13 @@ class SoundEngine {
         play(samples)
     }
 
-    /** Perfect catch — rising blip, pitch goes up a half step per multiplier
-     *  multiplier 1 = base, 2 = +1 half step, ... 5 = +4 half steps */
-    fun playPerfect(multiplier: Int = 1) {
+    /** Perfect catch — rising blip, pitch goes up a half step per streak
+     *  streak 1 = base, 2 = +1 half step, keeps climbing, resets on miss */
+    fun playPerfect(streak: Int = 1) {
         // Half step ratio = 2^(1/12) ≈ 1.05946
         val halfStep = 2f.pow(1f / 12f)
-        val pitchMult = halfStep.pow((multiplier - 1).coerceIn(0, 4).toFloat())
+        // Cap at 12 semitones (one octave) to avoid ear-piercing frequencies
+        val pitchMult = halfStep.pow((streak - 1).coerceIn(0, 12).toFloat())
         val baseFreq = 400f * pitchMult
 
         val samples = generate(150) { t ->

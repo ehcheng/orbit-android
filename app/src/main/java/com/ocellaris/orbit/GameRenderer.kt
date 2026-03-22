@@ -60,8 +60,8 @@ fun GameRenderer() {
                 lastScore = gameState.score
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(15)
-                if (gameState.showPerfect) {
-                    soundEngine.playPerfect(gameState.multiplier)
+                if (gameState.lastCatchWasPerfect) {
+                    soundEngine.playPerfect(gameState.perfectStreak)
                 } else {
                     soundEngine.playCatch()
                 }
