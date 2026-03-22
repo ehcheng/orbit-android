@@ -65,6 +65,13 @@ class GameState(private val context: Context) {
     private val travelSpeed = 600f
     private val gravityStrength = 800f  // acceleration in px/s² at reference distance
     private var totalGravityAssist = 0f  // tracks how much gravity curved the path
+    private var travelTime = 0f  // seconds since release
+    private val maxTravelTime = 3.0f  // shot timeout
+    // Release snapshot for perfect detection
+    private var releaseX = 0f
+    private var releaseY = 0f
+    private var releaseDirX = 0f
+    private var releaseDirY = 0f
 
     val particles = mutableListOf<Particle>()
 
@@ -192,6 +199,13 @@ class GameState(private val context: Context) {
                 travelVX = -sin(dotAngle) * travelSpeed
                 travelVY = cos(dotAngle) * travelSpeed
                 totalGravityAssist = 0f
+                travelTime = 0f
+                // Snapshot release position + direction for perfect calc
+                releaseX = dotX
+                releaseY = dotY
+                val speed = sqrt(travelVX * travelVX + travelVY * travelVY)
+                releaseDirX = travelVX / speed
+                releaseDirY = travelVY / speed
                 phase = Phase.TRAVELING
             }
             Phase.TRAVELING -> { }
@@ -261,6 +275,7 @@ class GameState(private val context: Context) {
                 // Move dot
                 dotX += travelVX * dt
                 dotY += travelVY * dt
+                travelTime += dt
 
                 // Minimal drag
                 travelVX *= (1f - 0.02f * dt)
@@ -280,10 +295,18 @@ class GameState(private val context: Context) {
                         phase = Phase.ORBITING
                         dotAngle = atan2(dotY - next.y, dotX - next.x)
 
-                        // Perfect = your aim was good enough that gravity barely changed your course
-                        // With strong gravity (800 px/s²), a straight shot accumulates ~50-100 assist
-                        // A bent shot accumulates 200+
-                        val isPerfect = totalGravityAssist < 150f
+                        // Perfect = the straight line from release would have hit near the center
+                        // Calculate closest distance from the release line to the orbit center
+                        val toTargetX = next.x - releaseX
+                        val toTargetY = next.y - releaseY
+                        // Project target onto release direction
+                        val projLen = toTargetX * releaseDirX + toTargetY * releaseDirY
+                        // Perpendicular distance from line to center
+                        val perpX = toTargetX - releaseDirX * projLen
+                        val perpY = toTargetY - releaseDirY * projLen
+                        val lineToCenter = sqrt(perpX * perpX + perpY * perpY)
+                        // Perfect if the straight line passes within the orbit radius
+                        val isPerfect = lineToCenter < next.radius * 0.8f && projLen > 0f
                         if (isPerfect) {
                             perfectStreak++
                             multiplier = (perfectStreak + 1).coerceAtMost(5)
@@ -313,7 +336,8 @@ class GameState(private val context: Context) {
 
                 val margin = 150f
                 if (dotX < -margin || dotX > screenWidth + margin ||
-                    dotY < -margin || dotY > screenHeight + margin) {
+                    dotY < -margin || dotY > screenHeight + margin ||
+                    travelTime > maxTravelTime) {
                     phase = Phase.GAME_OVER
                     gameOverAlpha = 0f
                     totalGravityAssist = 0f
