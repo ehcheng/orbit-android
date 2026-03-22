@@ -36,7 +36,10 @@ fun GameRenderer() {
         context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
     }
 
+    val soundEngine = remember { SoundEngine() }
+
     var lastScore by remember { mutableIntStateOf(0) }
+    var lastPhase by remember { mutableStateOf(Phase.READY) }
     var playerName by remember { mutableStateOf(leaderboard.getLastName()) }
 
     // Game loop
@@ -50,12 +53,36 @@ fun GameRenderer() {
 
             gameState.update(dt)
 
+            // Sound effects based on state transitions
+            val currentPhase = gameState.phase
+
             if (gameState.score != lastScore && gameState.score > 0) {
                 lastScore = gameState.score
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(15)
+                if (gameState.showPerfect) {
+                    soundEngine.playPerfect()
+                } else {
+                    soundEngine.playCatch()
+                }
+            }
+
+            if (currentPhase != lastPhase) {
+                when {
+                    currentPhase == Phase.TRAVELING && lastPhase == Phase.ORBITING -> soundEngine.playRelease()
+                    currentPhase == Phase.ORBITING && lastPhase == Phase.READY -> soundEngine.playStart()
+                    currentPhase == Phase.ORBITING && lastPhase == Phase.GAME_OVER -> soundEngine.playStart()
+                    (currentPhase == Phase.GAME_OVER || currentPhase == Phase.NAME_ENTRY) &&
+                        lastPhase == Phase.TRAVELING -> soundEngine.playGameOver()
+                }
+                lastPhase = currentPhase
             }
         }
+    }
+
+    // Cleanup sound engine
+    DisposableEffect(Unit) {
+        onDispose { soundEngine.release() }
     }
 
     // Read reactive state
@@ -81,7 +108,21 @@ fun GameRenderer() {
             val cyanColor = Color(0xFF00E5FF)
             val dimCyan = Color(0x4400E5FF)
             val purpleColor = Color(0xFFE040FB)
+            val yellowColor = Color(0xFFFFD600)
             val whiteColor = Color.White
+
+            // CRT scanlines overlay
+            val scanlineSpacing = 4f
+            var y = 0f
+            while (y < size.height) {
+                drawLine(
+                    color = Color.Black.copy(alpha = 0.12f),
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 1f
+                )
+                y += scanlineSpacing
+            }
 
             // Draw orbit rings
             for ((i, point) in gameState.orbitPoints.withIndex()) {
@@ -94,6 +135,14 @@ fun GameRenderer() {
                     else -> 0.05f
                 }
 
+                // Outer glow
+                drawCircle(
+                    color = cyanColor.copy(alpha = alpha * 0.3f),
+                    radius = point.radius,
+                    center = Offset(point.x, point.y),
+                    style = Stroke(width = if (isCurrent) 8f else 5f)
+                )
+                // Core ring
                 drawCircle(
                     color = cyanColor.copy(alpha = alpha),
                     radius = point.radius,
@@ -125,63 +174,7 @@ fun GameRenderer() {
                 }
             }
 
-            // Draw trajectory preview while orbiting — thick glowing line
-            if (gameState.phase == Phase.ORBITING || gameState.phase == Phase.READY) {
-                val tangentX = -sin(gameState.dotAngle)
-                val tangentY = cos(gameState.dotAngle)
-                val lineLength = 500f
-
-                // Outer glow (wide, visible)
-                drawLine(
-                    color = cyanColor.copy(alpha = 0.25f),
-                    start = Offset(gameState.dotX, gameState.dotY),
-                    end = Offset(
-                        gameState.dotX + tangentX * lineLength,
-                        gameState.dotY + tangentY * lineLength
-                    ),
-                    strokeWidth = 16f,
-                    cap = StrokeCap.Round
-                )
-
-                // Mid glow
-                drawLine(
-                    color = cyanColor.copy(alpha = 0.45f),
-                    start = Offset(gameState.dotX, gameState.dotY),
-                    end = Offset(
-                        gameState.dotX + tangentX * lineLength,
-                        gameState.dotY + tangentY * lineLength
-                    ),
-                    strokeWidth = 6f,
-                    cap = StrokeCap.Round
-                )
-
-                // Core line (bright)
-                drawLine(
-                    color = whiteColor.copy(alpha = 0.7f),
-                    start = Offset(gameState.dotX, gameState.dotY),
-                    end = Offset(
-                        gameState.dotX + tangentX * lineLength * 0.85f,
-                        gameState.dotY + tangentY * lineLength * 0.85f
-                    ),
-                    strokeWidth = 2.5f,
-                    cap = StrokeCap.Round
-                )
-
-                // Arrow dots at the tip
-                for (i in 1..10) {
-                    val t = 0.7f + i * 0.03f
-                    val dist = t * lineLength
-                    val dotAlpha = (1f - t) * 0.8f
-                    drawCircle(
-                        color = cyanColor.copy(alpha = dotAlpha),
-                        radius = 3.5f,
-                        center = Offset(
-                            gameState.dotX + tangentX * dist,
-                            gameState.dotY + tangentY * dist
-                        )
-                    )
-                }
-            }
+            // No trajectory preview — the skill is in the timing
 
             // Draw persistent travel trail (the path the dot actually flew)
             for (p in gameState.travelTrail) {
@@ -206,55 +199,92 @@ fun GameRenderer() {
                 )
             }
 
-            // Draw dot
+            // Draw dot — layered glow for bloom effect
             if (gameState.phase != Phase.GAME_OVER && gameState.phase != Phase.NAME_ENTRY) {
+                // Wide faint glow
                 drawCircle(
-                    color = whiteColor.copy(alpha = 0.3f),
-                    radius = 18f,
+                    color = cyanColor.copy(alpha = 0.1f),
+                    radius = 32f,
                     center = Offset(gameState.dotX, gameState.dotY)
                 )
+                // Mid glow
+                drawCircle(
+                    color = whiteColor.copy(alpha = 0.25f),
+                    radius = 20f,
+                    center = Offset(gameState.dotX, gameState.dotY)
+                )
+                // Bright core
+                drawCircle(
+                    color = whiteColor.copy(alpha = 0.8f),
+                    radius = 12f,
+                    center = Offset(gameState.dotX, gameState.dotY)
+                )
+                // Hot center
                 drawCircle(
                     color = whiteColor,
-                    radius = 10f,
+                    radius = 6f,
                     center = Offset(gameState.dotX, gameState.dotY)
                 )
             }
 
-            // Catch flash
+            // Catch flash — big expanding ring + center burst
             if (gameState.catchFlashAlpha > 0f) {
                 val current = gameState.orbitPoints.getOrNull(gameState.currentOrbitIndex)
                 if (current != null) {
+                    val expand = 1f + (1f - gameState.catchFlashAlpha) * 1.5f
+                    // Expanding ring
                     drawCircle(
-                        color = cyanColor.copy(alpha = gameState.catchFlashAlpha * 0.5f),
-                        radius = current.radius * (1f + (1f - gameState.catchFlashAlpha) * 0.5f),
+                        color = cyanColor.copy(alpha = gameState.catchFlashAlpha * 0.6f),
+                        radius = current.radius * expand,
                         center = Offset(current.x, current.y),
-                        style = Stroke(width = 3f)
+                        style = Stroke(width = 4f)
+                    )
+                    // Center burst
+                    drawCircle(
+                        color = whiteColor.copy(alpha = gameState.catchFlashAlpha * 0.4f),
+                        radius = 30f * gameState.catchFlashAlpha,
+                        center = Offset(current.x, current.y)
                     )
                 }
             }
 
-            // Score (top-left)
+            // Score (top-left) — arcade zero-padded
             if (gameState.phase != Phase.GAME_OVER && gameState.phase != Phase.NAME_ENTRY) {
-                val scoreText = "${gameState.score}"
+                val scoreText = String.format("%06d", gameState.score)
                 val scoreStyle = TextStyle(
-                    color = whiteColor.copy(alpha = 0.9f),
-                    fontSize = 48.sp,
-                    fontWeight = FontWeight.Thin
+                    color = whiteColor.copy(alpha = 0.85f),
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 3.sp
                 )
                 val scoreLayout = textMeasurer.measure(scoreText, scoreStyle)
                 drawText(textLayoutResult = scoreLayout, topLeft = Offset(40f, 60f))
 
+                // HI label + high score
+                val hiText = "HI ${String.format("%06d", gameState.highScore)}"
+                val hiStyle = TextStyle(
+                    color = yellowColor.copy(alpha = 0.5f),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 2.sp
+                )
+                val hiLayout = textMeasurer.measure(hiText, hiStyle)
+                drawText(
+                    textLayoutResult = hiLayout,
+                    topLeft = Offset(size.width - hiLayout.size.width - 40f, 68f)
+                )
+
                 if (gameState.multiplier > 1) {
                     val multText = "×${gameState.multiplier}"
                     val multStyle = TextStyle(
-                        color = purpleColor.copy(alpha = 0.8f),
-                        fontSize = 28.sp,
+                        color = purpleColor.copy(alpha = 0.9f),
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Light
                     )
                     val multLayout = textMeasurer.measure(multText, multStyle)
                     drawText(
                         textLayoutResult = multLayout,
-                        topLeft = Offset(40f + scoreLayout.size.width + 16f, 80f)
+                        topLeft = Offset(40f, 100f)
                     )
                 }
             }
@@ -303,6 +333,7 @@ fun GameRenderer() {
             NameEntryOverlay(
                 score = gameState.score,
                 initialName = playerName,
+                soundEngine = soundEngine,
                 onSubmit = { name ->
                     val trimmed = name.uppercase().take(3).ifEmpty { "???" }
                     playerName = trimmed
@@ -328,10 +359,10 @@ fun GameRenderer() {
 fun NameEntryOverlay(
     score: Int,
     initialName: String,
+    soundEngine: SoundEngine,
     onSubmit: (String) -> Unit
 ) {
     val letters = ('A'..'Z').toList()
-    // Parse initial name into 3 letter indices
     val initial = initialName.uppercase().padEnd(3, 'A').take(3)
     var char0 by remember { mutableIntStateOf((initial[0] - 'A').coerceIn(0, 25)) }
     var char1 by remember { mutableIntStateOf((initial[1] - 'A').coerceIn(0, 25)) }
@@ -341,33 +372,51 @@ fun NameEntryOverlay(
     val cyanColor = Color(0xFF00E5FF)
     val purpleColor = Color(0xFFE040FB)
 
+    fun cycleUp(slot: Int) {
+        soundEngine.playTick()
+        val newVal = when (slot) {
+            0 -> { char0 = (char0 + 1) % 26; char0 }
+            1 -> { char1 = (char1 + 1) % 26; char1 }
+            else -> { char2 = (char2 + 1) % 26; char2 }
+        }
+    }
+
+    fun cycleDown(slot: Int) {
+        soundEngine.playTick()
+        when (slot) {
+            0 -> char0 = (char0 - 1 + 26) % 26
+            1 -> char1 = (char1 - 1 + 26) % 26
+            else -> char2 = (char2 - 1 + 26) % 26
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f)),
+            .background(Color.Black.copy(alpha = 0.95f)),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Score
             Text(
-                text = "$score",
+                text = String.format("%06d", score),
                 color = Color.White,
-                fontSize = 72.sp,
-                fontWeight = FontWeight.Thin
+                fontSize = 56.sp,
+                fontWeight = FontWeight.Thin,
+                letterSpacing = 4.sp
             )
 
             Text(
                 text = "NEW HIGH SCORE",
-                color = purpleColor.copy(alpha = 0.8f),
+                color = purpleColor.copy(alpha = 0.9f),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Light,
                 letterSpacing = 6.sp
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text = "ENTER YOUR INITIALS",
@@ -377,103 +426,119 @@ fun NameEntryOverlay(
                 letterSpacing = 4.sp
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // 3-character arcade picker
+            // 3-character arcade picker — BIG touch targets
             Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val chars = listOf(char0, char1, char2)
                 for (slot in 0..2) {
                     val isActive = slot == activeSlot
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.width(72.dp)
                     ) {
-                        // Up arrow
-                        Text(
-                            text = "▲",
-                            color = if (isActive) cyanColor.copy(alpha = 0.8f) else cyanColor.copy(alpha = 0.2f),
-                            fontSize = 20.sp,
+                        // UP — big tap area
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .pointerInput(slot) {
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .pointerInput(slot, chars[slot]) {
                                     detectTapGestures {
                                         activeSlot = slot
-                                        val newVal = (chars[slot] + 1) % 26
-                                        when (slot) { 0 -> char0 = newVal; 1 -> char1 = newVal; 2 -> char2 = newVal }
+                                        cycleUp(slot)
                                     }
                                 }
-                                .padding(8.dp)
-                        )
+                        ) {
+                            Text(
+                                text = "▲",
+                                color = if (isActive) cyanColor else cyanColor.copy(alpha = 0.25f),
+                                fontSize = 28.sp
+                            )
+                        }
 
-                        // Letter
-                        Text(
-                            text = "${letters[chars[slot]]}",
-                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.6f),
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.Light,
-                            letterSpacing = 2.sp,
+                        // LETTER — tap to select slot
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
                                 .pointerInput(slot) {
-                                    detectTapGestures {
-                                        activeSlot = slot
-                                    }
+                                    detectTapGestures { activeSlot = slot }
                                 }
-                        )
+                        ) {
+                            Text(
+                                text = "${letters[chars[slot]]}",
+                                color = if (isActive) Color.White else Color.White.copy(alpha = 0.5f),
+                                fontSize = 52.sp,
+                                fontWeight = FontWeight.Light
+                            )
+                        }
 
-                        // Underline for active slot
+                        // Underline
                         Box(
                             modifier = Modifier
-                                .width(36.dp)
-                                .height(2.dp)
+                                .width(44.dp)
+                                .height(if (isActive) 3.dp else 1.dp)
                                 .background(
-                                    if (isActive) cyanColor.copy(alpha = 0.8f)
-                                    else cyanColor.copy(alpha = 0.15f)
+                                    if (isActive) cyanColor else cyanColor.copy(alpha = 0.15f)
                                 )
                         )
 
-                        // Down arrow
-                        Text(
-                            text = "▼",
-                            color = if (isActive) cyanColor.copy(alpha = 0.8f) else cyanColor.copy(alpha = 0.2f),
-                            fontSize = 20.sp,
+                        // DOWN — big tap area
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .pointerInput(slot) {
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .pointerInput(slot, chars[slot]) {
                                     detectTapGestures {
                                         activeSlot = slot
-                                        val newVal = (chars[slot] - 1 + 26) % 26
-                                        when (slot) { 0 -> char0 = newVal; 1 -> char1 = newVal; 2 -> char2 = newVal }
+                                        cycleDown(slot)
                                     }
                                 }
-                                .padding(8.dp)
-                        )
+                        ) {
+                            Text(
+                                text = "▼",
+                                color = if (isActive) cyanColor else cyanColor.copy(alpha = 0.25f),
+                                fontSize = 28.sp
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // OK button
-            Text(
-                text = "▸  OK  ◂",
-                color = cyanColor,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 6.sp,
+            // OK button — big and obvious
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .pointerInput(Unit) {
                         detectTapGestures {
+                            soundEngine.playConfirm()
                             val name = "${letters[char0]}${letters[char1]}${letters[char2]}"
                             onSubmit(name)
                         }
                     }
                     .border(
                         width = 1.dp,
-                        color = cyanColor.copy(alpha = 0.4f),
+                        color = cyanColor.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(4.dp)
                     )
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
-            )
+                    .padding(horizontal = 32.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = "▸  OK  ◂",
+                    color = cyanColor,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 8.sp
+                )
+            }
         }
     }
 }
