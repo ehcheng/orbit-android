@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Orbit ring -->
+    <path
+        android:pathData="M54,54m-24,0a24,24 0,1,1 48,0a24,24 0,1,1 -48,0"
+        android:strokeWidth="2"
+        android:strokeColor="#00E5FF"
+        android:fillColor="#00000000"/>
+    <!-- Dot on orbit -->
+    <path
+        android:pathData="M78,54m-5,0a5,5 0,1,1 10,0a5,5 0,1,1 -10,0"
+        android:fillColor="#FFFFFF"/>
+    <!-- Center point -->
+    <path
+        android:pathData="M54,54m-3,0a3,3 0,1,1 6,0a3,3 0,1,1 -6,0"
+        android:fillColor="#00E5FF"/>
+</vector>
