@@ -94,6 +94,7 @@ class GameState(private val context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("orbit_prefs", Context.MODE_PRIVATE)
+    val leaderboard = Leaderboard(context)
 
     init {
         highScore = prefs.getInt("high_score", 0)
@@ -369,8 +370,7 @@ class GameState(private val context: Context) {
                     dotY < -margin || dotY > screenHeight + margin ||
                     travelTime > maxTravelTime) {
                     totalGravityAssist = 0f
-                    if (score > 0) {
-                        // Check if score qualifies for leaderboard — done in renderer
+                    if (score > 0 && leaderboard.isHighScore(score)) {
                         isNewHighScore = true
                         phase = Phase.NAME_ENTRY
                     } else {

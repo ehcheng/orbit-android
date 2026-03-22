@@ -28,7 +28,7 @@ import kotlin.math.*
 fun GameRenderer() {
     val context = LocalContext.current
     val gameState = remember { GameState(context) }
-    val leaderboard = remember { Leaderboard(context) }
+    val leaderboard = gameState.leaderboard
     val textMeasurer = rememberTextMeasurer()
 
     val vibrator = remember {
