@@ -63,6 +63,8 @@ class GameState(private val context: Context) {
     var travelVY = 0f
         private set
     private val travelSpeed = 800f
+    private val gravityStrength = 180000f  // gravity constant — pulls dot toward next orbit point
+    private var totalGravityAssist = 0f  // tracks how much gravity curved the path
 
     val particles = mutableListOf<Particle>()
 
@@ -189,6 +191,7 @@ class GameState(private val context: Context) {
             Phase.ORBITING -> {
                 travelVX = -sin(dotAngle) * travelSpeed
                 travelVY = cos(dotAngle) * travelSpeed
+                totalGravityAssist = 0f
                 phase = Phase.TRAVELING
             }
             Phase.TRAVELING -> { }
@@ -231,18 +234,39 @@ class GameState(private val context: Context) {
                 spawnTrailParticle()
             }
             Phase.TRAVELING -> {
+                // Apply gravity from the next orbit point
+                val nextIndex = currentOrbitIndex + 1
+                if (nextIndex < orbitPoints.size) {
+                    val next = orbitPoints[nextIndex]
+                    val dx = next.x - dotX
+                    val dy = next.y - dotY
+                    val distSq = dx * dx + dy * dy
+                    val dist = sqrt(distSq).coerceAtLeast(50f)
+
+                    // Gravity: F = G / r² — stronger when closer
+                    val gravForce = gravityStrength / distSq.coerceAtLeast(2500f)
+                    val gravX = (dx / dist) * gravForce
+                    val gravY = (dy / dist) * gravForce
+
+                    travelVX += gravX * dt
+                    travelVY += gravY * dt
+
+                    // Track how much gravity is helping (for perfect detection)
+                    totalGravityAssist += sqrt(gravX * gravX + gravY * gravY) * dt
+                }
+
+                // Move dot
                 dotX += travelVX * dt
                 dotY += travelVY * dt
 
-                // Very slight deceleration — dot should travel far
-                travelVX *= (1f - 0.1f * dt)
-                travelVY *= (1f - 0.1f * dt)
+                // Very slight drag
+                travelVX *= (1f - 0.05f * dt)
+                travelVY *= (1f - 0.05f * dt)
 
                 spawnTrailParticle()
-                // Persistent travel trail — fades slowly
                 travelTrail.add(Particle(dotX, dotY, alpha = 1f, size = 3f))
 
-                val nextIndex = currentOrbitIndex + 1
+                // Check capture
                 if (nextIndex < orbitPoints.size) {
                     val next = orbitPoints[nextIndex]
                     val dist = sqrt((dotX - next.x).pow(2) + (dotY - next.y).pow(2))
@@ -252,20 +276,24 @@ class GameState(private val context: Context) {
                         phase = Phase.ORBITING
                         dotAngle = atan2(dotY - next.y, dotX - next.x)
 
-                        val isPerfect = dist < next.captureRadius * 0.7f
+                        // Perfect = clean catch without much gravity rescue
+                        // Low gravity assist means you aimed well
+                        val isPerfect = totalGravityAssist < 25f
                         if (isPerfect) {
                             perfectStreak++
-                            multiplier = (perfectStreak / 2 + 1).coerceAtMost(5)
+                            multiplier = (perfectStreak + 1).coerceAtMost(5)
                             showPerfect = true
                             perfectAlpha = 1f
                         } else {
-                            perfectStreak = 0
+                            // Gravity-assisted catch — still good, but reset streak
+                            if (perfectStreak > 0) perfectStreak = 0
                             multiplier = 1
                         }
 
                         score += multiplier
                         catchFlashAlpha = 1f
-                        orbitSpeed += 0.12f
+                        orbitSpeed += 0.10f
+                        totalGravityAssist = 0f  // reset for next launch
 
                         if (currentOrbitIndex >= orbitPoints.size - 3) {
                             generateNextPoints(3)
@@ -278,11 +306,12 @@ class GameState(private val context: Context) {
                     }
                 }
 
-                val margin = 100f
+                val margin = 150f
                 if (dotX < -margin || dotX > screenWidth + margin ||
                     dotY < -margin || dotY > screenHeight + margin) {
                     phase = Phase.GAME_OVER
                     gameOverAlpha = 0f
+                    totalGravityAssist = 0f
                 }
             }
             Phase.NAME_ENTRY -> { /* waiting for input */ }

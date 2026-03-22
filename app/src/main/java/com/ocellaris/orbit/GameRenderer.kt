@@ -290,20 +290,41 @@ fun GameRenderer() {
                 }
             }
 
-            // Perfect text
+            // Perfect text + multiplier flash
             if (gameState.showPerfect && gameState.perfectAlpha > 0f) {
+                val perfText = if (gameState.multiplier > 1) {
+                    "PERFECT ×${gameState.multiplier}"
+                } else {
+                    "PERFECT"
+                }
+                // Glow behind text
+                val glowStyle = TextStyle(
+                    color = purpleColor.copy(alpha = gameState.perfectAlpha * 0.3f),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 6.sp
+                )
+                val glowLayout = textMeasurer.measure(perfText, glowStyle)
+                drawText(
+                    textLayoutResult = glowLayout,
+                    topLeft = Offset(
+                        (size.width - glowLayout.size.width) / 2f,
+                        size.height * 0.33f
+                    )
+                )
+                // Core text
                 val perfStyle = TextStyle(
                     color = purpleColor.copy(alpha = gameState.perfectAlpha),
-                    fontSize = 20.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Light,
-                    letterSpacing = 4.sp
+                    letterSpacing = 6.sp
                 )
-                val perfLayout = textMeasurer.measure("PERFECT", perfStyle)
+                val perfLayout = textMeasurer.measure(perfText, perfStyle)
                 drawText(
                     textLayoutResult = perfLayout,
                     topLeft = Offset(
                         (size.width - perfLayout.size.width) / 2f,
-                        size.height * 0.35f
+                        size.height * 0.33f
                     )
                 )
             }
