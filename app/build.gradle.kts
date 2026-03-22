@@ -12,14 +12,25 @@ android {
         applicationId = "com.ocellaris.orbit"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "0.6.1"
+        versionCode = 20
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("../orbit-release.jks")
+            storePassword = System.getenv("ORBIT_STORE_PASSWORD") ?: ""
+            keyAlias = "orbit"
+            keyPassword = System.getenv("ORBIT_STORE_PASSWORD") ?: ""
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
