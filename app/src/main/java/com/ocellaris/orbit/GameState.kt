@@ -237,10 +237,9 @@ class GameState(private val context: Context) {
         }
     }
 
-    /** Called from UI after name entry is submitted */
+    /** Called from UI after name entry is submitted — go straight to attract */
     fun nameSubmitted() {
-        phase = Phase.GAME_OVER
-        gameOverAlpha = 0f
+        startAttractMode()
     }
 
     fun update(dt: Float) {
@@ -374,7 +373,8 @@ class GameState(private val context: Context) {
                         isNewHighScore = true
                         phase = Phase.NAME_ENTRY
                     } else {
-                        phase = Phase.GAME_OVER
+                        // Not top 10 — straight back to attract
+                        startAttractMode()
                     }
                     gameOverAlpha = 0f
                 }
