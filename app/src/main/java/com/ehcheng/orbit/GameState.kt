@@ -411,7 +411,7 @@ class GameState(private val context: Context) {
                         lastCatchWasPerfect = isPerfect
                         if (isPerfect) {
                             perfectStreak++
-                            multiplier = (perfectStreak + 1).coerceAtMost(5)
+                            multiplier = perfectStreak + 1  // uncapped — reward the streak
                             showPerfect = true
                             perfectAlpha = 1f
                         } else {
