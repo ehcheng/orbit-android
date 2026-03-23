@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ocellaris.orbit"
+    namespace = "com.ehcheng.orbit"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.ocellaris.orbit"
+        applicationId = "com.ehcheng.orbit"
         minSdk = 26
         targetSdk = 35
         versionCode = 20

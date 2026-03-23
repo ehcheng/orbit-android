@@ -1,4 +1,4 @@
-package com.ocellaris.orbit
+package com.ehcheng.orbit
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
