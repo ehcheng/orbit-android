@@ -1,0 +1,23 @@
+Orbit is a one-tap arcade game with gravity-based orbital mechanics.
+
+Tap to release your dot from its orbit. Gravity pulls it toward the next circle — time your release to arc into the catch zone. Chain perfect shots to build your multiplier.
+
+<b>How to Play</b>
+• Tap to release the dot tangentially from its orbit
+• Gravity wells pull the dot toward nearby circles
+• Land in the catch zone to score
+• Perfect shots (aimed straight at the circle) build a multiplier streak
+• Miss the circle or run out of time — game over
+
+<b>Features</b>
+• Gravity-based orbital mechanics with satisfying curved arcs
+• Arcade-style top 10 leaderboard with 3-character initials
+• Synthesized retro sounds with rising pitch on perfect streaks
+• CRT scanlines, neon glow, vector aesthetic
+• Attract mode with auto-play demo
+• OLED-friendly pure black background
+• Scales to any screen size (foldable-friendly)
+• 60fps rendering
+
+<b>Privacy</b>
+No permissions required. No ads. No tracking. No internet access. Your data stays on your device.

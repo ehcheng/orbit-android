@@ -1,0 +1,7 @@
+Initial release.
+
+• Gravity-based orbital mechanics
+• Arcade-style leaderboard with 3-character initials
+• Synthesized retro sounds with rising pitch on perfect streaks
+• CRT scanlines and neon glow aesthetic
+• Attract mode with auto-play demo

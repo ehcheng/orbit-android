@@ -17,11 +17,14 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("../orbit-release.jks")
-            storePassword = System.getenv("ORBIT_STORE_PASSWORD") ?: ""
-            keyAlias = "orbit"
-            keyPassword = System.getenv("ORBIT_STORE_PASSWORD") ?: ""
+        val storePass = System.getenv("ORBIT_STORE_PASSWORD")
+        if (storePass != null) {
+            create("release") {
+                storeFile = file("../orbit-release.jks")
+                storePassword = storePass
+                keyAlias = "orbit"
+                keyPassword = storePass
+            }
         }
     }
 
@@ -30,7 +33,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = try { signingConfigs.getByName("release") } catch (_: Exception) { null }
+            signingConfig = releaseSigning
         }
     }
 
