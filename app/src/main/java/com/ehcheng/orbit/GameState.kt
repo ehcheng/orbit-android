@@ -68,7 +68,7 @@ class GameState(private val context: Context) {
     var travelVY = 0f
         private set
     private val travelSpeed = 600f
-    private val gravityStrength = 800f  // acceleration in px/s² at reference distance
+    private val gravityStrength = 960f  // acceleration in px/s² at reference distance (+20%)
     private var totalGravityAssist = 0f  // tracks how much gravity curved the path
     private var travelTime = 0f  // seconds since release
     private val maxTravelTime = 3.0f  // shot timeout
