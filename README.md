@@ -2,7 +2,7 @@
 
 A one-tap arcade game for Android. Release, arc, catch. Chase the high score.
 
-![Orbit Attract Screen](screenshot-attract.png)
+![Orbit](screenshot.jpg)
 
 ## How to Play
 
