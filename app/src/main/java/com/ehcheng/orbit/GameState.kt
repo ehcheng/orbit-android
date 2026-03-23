@@ -145,7 +145,7 @@ class GameState(private val context: Context) {
 
         val rng = java.util.Random()
         val startX = screenWidth * 0.25f + rng.nextFloat() * screenWidth * 0.5f
-        val startY = screenHeight * 0.5f + rng.nextFloat() * screenHeight * 0.25f
+        val startY = screenHeight * 0.45f + rng.nextFloat() * screenHeight * 0.3f  // never in top score area
         orbitPoints.add(OrbitPoint(startX, startY, radius = 80f, captureRadius = 90f))
         generateEasyPoints(3)
         generateNextPoints(3)
@@ -166,7 +166,9 @@ class GameState(private val context: Context) {
     }
 
     private fun placePoint(fromX: Float, fromY: Float, distance: Float, rng: java.util.Random): Pair<Float, Float> {
-        val pad = 220f
+        val padX = 220f
+        val padTop = 350f  // keep circles below the score/HI text area
+        val padBottom = 220f
         // Minimum separation: sum of radii + capture zones + buffer
         // With smaller circles (~80+90 = 170 per point), 2*170 + buffer = 400
         val minSep = 400f
@@ -178,8 +180,8 @@ class GameState(private val context: Context) {
         for (attempt in 0 until 40) {
             val angle = rng.nextFloat() * PI.toFloat() * 2f
             val d = distance + rng.nextFloat() * 120f
-            val nx = (fromX + d * cos(angle)).coerceIn(pad, screenWidth - pad)
-            val ny = (fromY + d * sin(angle)).coerceIn(pad, screenHeight - pad)
+            val nx = (fromX + d * cos(angle)).coerceIn(padX, screenWidth - padX)
+            val ny = (fromY + d * sin(angle)).coerceIn(padTop, screenHeight - padBottom)
 
             // Find the closest existing point
             val closestDist = orbitPoints.minOfOrNull { existing ->
