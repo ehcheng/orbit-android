@@ -209,9 +209,9 @@ class GameState(private val context: Context) {
 
             val (nx, ny) = placePoint(last.x, last.y, distance, rng)
 
-            // Smaller circles — radius shrinks with difficulty
-            val radius = (75f - difficulty * 2f).coerceAtLeast(50f) + rng.nextFloat() * 15f
-            val captureRadius = (85f - difficulty * 3f).coerceAtLeast(40f) + rng.nextFloat() * 10f
+            // Fixed circle size — speed increase is the only difficulty ramp
+            val radius = 75f + rng.nextFloat() * 15f
+            val captureRadius = 85f + rng.nextFloat() * 10f
 
             orbitPoints.add(OrbitPoint(nx, ny, radius, captureRadius))
         }
