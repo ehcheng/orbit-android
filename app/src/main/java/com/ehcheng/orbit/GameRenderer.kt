@@ -276,35 +276,62 @@ fun GameRenderer() {
                 val scoreLayout = textMeasurer.measure(scoreText, scoreStyle)
                 drawText(textLayoutResult = scoreLayout, topLeft = Offset(40f, scoreY))
 
-                // HI label + high score
+                // Right side: HI score + ranks
+                val rightX = size.width - 40f
+                val rankFontSize = 14.sp
+                val rankAlpha = 0.45f
+
+                // HI score
                 val hiText = "HI ${String.format("%06d", gameState.highScore)}"
                 val hiStyle = TextStyle(
                     color = yellowColor.copy(alpha = 0.5f),
-                    fontSize = 16.sp,
+                    fontSize = rankFontSize,
                     fontWeight = FontWeight.Light,
                     letterSpacing = 2.sp
                 )
                 val hiLayout = textMeasurer.measure(hiText, hiStyle)
                 drawText(
                     textLayoutResult = hiLayout,
-                    topLeft = Offset(size.width - hiLayout.size.width - 40f, scoreY + 8f)
+                    topLeft = Offset(rightX - hiLayout.size.width, scoreY + 8f)
                 )
 
-                // Global rank (if available)
-                if (globalLeaderboard.lastGlobalRank > 0 && globalLeaderboard.totalGlobalScores > 0) {
-                    val rankText = "#${globalLeaderboard.lastGlobalRank} OF ${globalLeaderboard.totalGlobalScores}"
-                    val rankStyle = TextStyle(
-                        color = cyanColor.copy(alpha = 0.4f),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Light,
-                        letterSpacing = 2.sp
-                    )
-                    val rankLayout = textMeasurer.measure(rankText, rankStyle)
-                    drawText(
-                        textLayoutResult = rankLayout,
-                        topLeft = Offset((size.width - rankLayout.size.width) / 2f, scoreY + 8f)
-                    )
+                // L-RANK
+                val localEntries = leaderboard.getEntries()
+                val localRank = localEntries.indexOfFirst { gameState.score >= it.score }.let {
+                    if (it == -1 && localEntries.size < 100) localEntries.size + 1
+                    else if (it == -1) -1
+                    else it + 1
                 }
+                val lRankStr = if (localRank in 1..100) String.format("%03d", localRank) else "---"
+                val lRankText = "L-RANK $lRankStr"
+                val lRankStyle = TextStyle(
+                    color = cyanColor.copy(alpha = rankAlpha),
+                    fontSize = rankFontSize,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 2.sp
+                )
+                val lRankLayout = textMeasurer.measure(lRankText, lRankStyle)
+                val rankLineY = scoreY + 8f + hiLayout.size.height + 4f
+                drawText(
+                    textLayoutResult = lRankLayout,
+                    topLeft = Offset(rightX - lRankLayout.size.width, rankLineY)
+                )
+
+                // G-RANK
+                val gRank = globalLeaderboard.lastGlobalRank
+                val gRankStr = if (gRank in 1..100) String.format("%03d", gRank) else "---"
+                val gRankText = "G-RANK $gRankStr"
+                val gRankStyle = TextStyle(
+                    color = Color(0xFF00E676).copy(alpha = rankAlpha),
+                    fontSize = rankFontSize,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 2.sp
+                )
+                val gRankLayout = textMeasurer.measure(gRankText, gRankStyle)
+                drawText(
+                    textLayoutResult = gRankLayout,
+                    topLeft = Offset(rightX - gRankLayout.size.width, rankLineY + lRankLayout.size.height + 2f)
+                )
 
                 if (gameState.multiplier > 1) {
                     val multText = "×${gameState.multiplier}"
@@ -490,7 +517,7 @@ fun AttractOverlay(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     val tabs = mutableListOf("LOCAL", "GLOBAL")
-                    if (tabCount == 3) tabs.add("YOU")
+                    if (tabCount == 3) tabs.add("YOUR GLOBAL RANK")
                     tabs.forEachIndexed { i, label ->
                         Text(
                             text = label,
@@ -534,7 +561,7 @@ fun AttractOverlay(
                     // BRACKET — around me
                     if (bracket != null) {
                         Text(
-                            text = "─── YOUR RANK: #${bracket.yourRank} OF ${bracket.totalScores} ───",
+                            text = "── GLOBAL RANK #${bracket.yourRank} OF ${bracket.totalScores} ──",
                             color = purpleColor.copy(alpha = 0.5f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Light,
