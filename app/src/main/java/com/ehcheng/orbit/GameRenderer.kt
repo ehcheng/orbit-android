@@ -29,6 +29,7 @@ fun GameRenderer() {
     val context = LocalContext.current
     val gameState = remember { GameState(context) }
     val leaderboard = gameState.leaderboard
+    val globalLeaderboard = remember { GlobalLeaderboard() }
     val textMeasurer = rememberTextMeasurer()
 
     val vibrator = remember {
@@ -80,9 +81,22 @@ fun GameRenderer() {
         }
     }
 
-    // Cleanup sound engine
+    // Fetch global data on startup
+    LaunchedEffect(Unit) {
+        globalLeaderboard.fetchTop()
+        // Fetch bracket for local best score
+        val best = leaderboard.getEntries().maxByOrNull { it.score }
+        if (best != null && best.score > 0) {
+            globalLeaderboard.fetchBracket(best.score)
+        }
+    }
+
+    // Cleanup
     DisposableEffect(Unit) {
-        onDispose { soundEngine.release() }
+        onDispose {
+            soundEngine.release()
+            globalLeaderboard.release()
+        }
     }
 
     // Read reactive state
@@ -276,6 +290,22 @@ fun GameRenderer() {
                     topLeft = Offset(size.width - hiLayout.size.width - 40f, scoreY + 8f)
                 )
 
+                // Global rank (if available)
+                if (globalLeaderboard.lastGlobalRank > 0 && globalLeaderboard.totalGlobalScores > 0) {
+                    val rankText = "#${globalLeaderboard.lastGlobalRank} OF ${globalLeaderboard.totalGlobalScores}"
+                    val rankStyle = TextStyle(
+                        color = cyanColor.copy(alpha = 0.4f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Light,
+                        letterSpacing = 2.sp
+                    )
+                    val rankLayout = textMeasurer.measure(rankText, rankStyle)
+                    drawText(
+                        textLayoutResult = rankLayout,
+                        topLeft = Offset((size.width - rankLayout.size.width) / 2f, scoreY + 8f)
+                    )
+                }
+
                 if (gameState.multiplier > 1) {
                     val multText = "×${gameState.multiplier}"
                     val multStyle = TextStyle(
@@ -338,8 +368,10 @@ fun GameRenderer() {
         // Attract mode — leaderboard + INSERT COIN over demo gameplay
         if (phaseState == Phase.ATTRACT) {
             AttractOverlay(
-                leaderboard = leaderboard,
+                localLeaderboard = leaderboard,
+                globalLeaderboard = globalLeaderboard,
                 lastGameScore = gameState.lastGameScore,
+                hasPlayedGame = gameState.lastGameScore >= 0,
                 onInsertCoin = { gameState.onTap() }
             )
         }
@@ -352,9 +384,13 @@ fun GameRenderer() {
                 soundEngine = soundEngine,
                 onSubmit = { name ->
                     val trimmed = name.uppercase().take(3).ifEmpty { "???" }
+                    val finalScore = gameState.score
                     playerName = trimmed
-                    leaderboard.addEntry(trimmed, gameState.score)
+                    leaderboard.addEntry(trimmed, finalScore)
                     leaderboard.setLastName(trimmed)
+                    // Submit to global leaderboard
+                    globalLeaderboard.submitScore(trimmed, finalScore)
+                    globalLeaderboard.fetchBracket(finalScore)
                     gameState.nameSubmitted()
                 }
             )
@@ -373,34 +409,47 @@ fun GameRenderer() {
 
 @Composable
 fun AttractOverlay(
-    leaderboard: Leaderboard,
-    lastGameScore: Int,  // -1 = no game played
+    localLeaderboard: Leaderboard,
+    globalLeaderboard: GlobalLeaderboard,
+    lastGameScore: Int,
+    hasPlayedGame: Boolean,
     onInsertCoin: () -> Unit
 ) {
-    // Re-read entries each time attract is shown
-    val entries = leaderboard.getEntries()
+    val localEntries = localLeaderboard.getEntries()
+    val globalEntries = globalLeaderboard.globalTop
+    val bracket = globalLeaderboard.lastBracket
     val cyanColor = Color(0xFF00E5FF)
     val purpleColor = Color(0xFFE040FB)
     val yellowColor = Color(0xFFFFD600)
+    val greenColor = Color(0xFF00E676)
 
-    // Force recomposition for pulsing animation
+    // Tab cycling: LOCAL → GLOBAL → BRACKET (if played)
+    val tabCount = if (hasPlayedGame && bracket != null) 3 else if (globalEntries.isNotEmpty()) 2 else 1
+    var currentTab by remember { mutableIntStateOf(0) }
+
+    // Auto-cycle tabs every 4 seconds + pulse tick
     var tick by remember { mutableStateOf(0L) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(tabCount) {
         while (true) {
             kotlinx.coroutines.delay(50)
             tick = System.currentTimeMillis()
+        }
+    }
+    LaunchedEffect(tabCount) {
+        while (true) {
+            kotlinx.coroutines.delay(4000)
+            currentTab = (currentTab + 1) % tabCount
         }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))  // lighter so demo is visible
+            .background(Color.Black.copy(alpha = 0.55f))
             .pointerInput(Unit) {
                 detectTapGestures { onInsertCoin() }
             }
     ) {
-        // Main content — centered
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -420,73 +469,117 @@ fun AttractOverlay(
 
             // Last game score
             if (lastGameScore >= 0) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                val rankStr = if (globalLeaderboard.lastGlobalRank > 0) {
+                    "  ·  #${globalLeaderboard.lastGlobalRank} OF ${globalLeaderboard.totalGlobalScores}"
+                } else ""
                 Text(
-                    text = "LAST GAME  ${String.format("%06d", lastGameScore)}",
+                    text = "LAST GAME  ${String.format("%06d", lastGameScore)}$rankStr",
                     color = purpleColor.copy(alpha = 0.7f),
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Light,
-                    letterSpacing = 3.sp
+                    letterSpacing = 2.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Leaderboard
-            if (entries.isNotEmpty()) {
-                Text(
-                    text = "─── HIGH SCORES ───",
-                    color = cyanColor.copy(alpha = 0.4f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Light,
-                    letterSpacing = 4.sp
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                entries.forEachIndexed { index, entry ->
-                    val rankColor = when (index) {
-                        0 -> yellowColor
-                        1 -> Color(0xFFB0BEC5)
-                        2 -> Color(0xFFFF8A65)
-                        else -> Color.White
+            // Tab indicators
+            if (tabCount > 1) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    val tabs = mutableListOf("LOCAL", "GLOBAL")
+                    if (tabCount == 3) tabs.add("YOU")
+                    tabs.forEachIndexed { i, label ->
+                        Text(
+                            text = label,
+                            color = if (i == currentTab) cyanColor else cyanColor.copy(alpha = 0.25f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Light,
+                            letterSpacing = 4.sp
+                        )
                     }
-                    val alpha = (0.8f - index * 0.05f).coerceAtLeast(0.3f)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth(0.75f)
-                            .padding(vertical = 1.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+            // Tab content
+            when (currentTab) {
+                0 -> {
+                    // LOCAL
+                    Text(
+                        text = "─── LOCAL HIGH SCORES ───",
+                        color = cyanColor.copy(alpha = 0.4f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Light,
+                        letterSpacing = 3.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    ScoreList(localEntries.map { GlobalEntry(it.name, it.score) }, yellowColor, cyanColor)
+                }
+                1 -> {
+                    // GLOBAL TOP
+                    Text(
+                        text = "─── GLOBAL HIGH SCORES ───",
+                        color = greenColor.copy(alpha = 0.4f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Light,
+                        letterSpacing = 3.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    ScoreList(globalEntries.take(10), yellowColor, greenColor)
+                }
+                2 -> {
+                    // BRACKET — around me
+                    if (bracket != null) {
                         Text(
-                            text = String.format("%2d", index + 1),
-                            color = cyanColor.copy(alpha = alpha * 0.5f),
-                            fontSize = 16.sp,
+                            text = "─── YOUR RANK: #${bracket.yourRank} OF ${bracket.totalScores} ───",
+                            color = purpleColor.copy(alpha = 0.5f),
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Light,
-                            modifier = Modifier.width(32.dp)
+                            letterSpacing = 3.sp
                         )
-                        Text(
-                            text = entry.name.take(3).padEnd(3),
-                            color = rankColor.copy(alpha = alpha),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Light,
-                            letterSpacing = 6.sp,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = String.format("%06d", entry.score),
-                            color = rankColor.copy(alpha = alpha),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Light,
-                            letterSpacing = 2.sp
-                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Above you
+                        bracket.above.forEachIndexed { _, entry ->
+                            ScoreRow(
+                                rank = null,
+                                name = entry.name,
+                                score = entry.score,
+                                color = Color.White.copy(alpha = 0.5f),
+                                accentColor = cyanColor
+                            )
+                        }
+                        // You (highlighted)
+                        if (bracket.below.isNotEmpty()) {
+                            val you = bracket.below.first()
+                            ScoreRow(
+                                rank = bracket.yourRank,
+                                name = you.name,
+                                score = you.score,
+                                color = purpleColor,
+                                accentColor = purpleColor,
+                                isHighlighted = true
+                            )
+                            // Below you
+                            bracket.below.drop(1).forEach { entry ->
+                                ScoreRow(
+                                    rank = null,
+                                    name = entry.name,
+                                    score = entry.score,
+                                    color = Color.White.copy(alpha = 0.4f),
+                                    accentColor = cyanColor
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // INSERT COIN — pinned to bottom, always visible
+        // INSERT COIN
         @Suppress("UNUSED_EXPRESSION")
         tick
         val pulseAlpha = 0.3f + 0.5f * sin(System.currentTimeMillis() / 400f).toFloat()
@@ -499,6 +592,70 @@ fun AttractOverlay(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 80.dp)
+        )
+    }
+}
+
+@Composable
+fun ScoreList(entries: List<GlobalEntry>, goldColor: Color, accentColor: Color) {
+    val silverColor = Color(0xFFB0BEC5)
+    val bronzeColor = Color(0xFFFF8A65)
+
+    entries.take(10).forEachIndexed { index, entry ->
+        val rankColor = when (index) {
+            0 -> goldColor
+            1 -> silverColor
+            2 -> bronzeColor
+            else -> Color.White
+        }
+        val alpha = (0.8f - index * 0.05f).coerceAtLeast(0.3f)
+
+        ScoreRow(
+            rank = index + 1,
+            name = entry.name,
+            score = entry.score,
+            color = rankColor.copy(alpha = alpha),
+            accentColor = accentColor.copy(alpha = alpha * 0.5f)
+        )
+    }
+}
+
+@Composable
+fun ScoreRow(
+    rank: Int?,
+    name: String,
+    score: Int,
+    color: Color,
+    accentColor: Color,
+    isHighlighted: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(0.75f)
+            .padding(vertical = if (isHighlighted) 3.dp else 1.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = if (rank != null) String.format("%2d", rank) else "  ",
+            color = accentColor,
+            fontSize = if (isHighlighted) 17.sp else 15.sp,
+            fontWeight = FontWeight.Light,
+            modifier = Modifier.width(32.dp)
+        )
+        Text(
+            text = if (isHighlighted) "→${name.take(3).padEnd(3)}←" else " ${name.take(3).padEnd(3)} ",
+            color = color,
+            fontSize = if (isHighlighted) 17.sp else 15.sp,
+            fontWeight = if (isHighlighted) FontWeight.Normal else FontWeight.Light,
+            letterSpacing = 4.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = String.format("%06d", score),
+            color = color,
+            fontSize = if (isHighlighted) 17.sp else 15.sp,
+            fontWeight = FontWeight.Light,
+            letterSpacing = 2.sp
         )
     }
 }

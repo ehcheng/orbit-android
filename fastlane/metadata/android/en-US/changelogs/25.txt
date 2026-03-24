@@ -1,0 +1,9 @@
+Global leaderboard powered by Cloudflare Workers + D1.
+
+• Three-tab attract screen: LOCAL → GLOBAL → YOU (bracket view)
+• Auto-cycles between tabs every 4 seconds
+• Live global rank shown in HUD during gameplay
+• "Around me" bracket shows scores above and below yours
+• LAST GAME score + global rank shown on attract screen
+• Scores submitted anonymously (3-char initials)
+• Works offline — local leaderboard always available
